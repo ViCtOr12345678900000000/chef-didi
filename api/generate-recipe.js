@@ -68,7 +68,14 @@ youMightNeed = pantry staples only.
 
     if (!geminiRes.ok) {
       console.error(geminiData);
-      return res.status(500).json({ error: geminiData.error?.message || "Gemini failed" });
+      const msg = geminiData.error?.message || "Gemini failed";
+      if (msg.includes("Quota") || msg.includes("exceeded") || msg.includes("limit")) {
+        return res.status(429).json({ error: "QUOTA: " + msg });
+      }
+      if (msg.includes("overloaded") || msg.includes("high demand") || msg.includes("503") || geminiRes.status === 503) {
+        return res.status(503).json({ error: "OVERLOADED: " + msg });
+      }
+      return res.status(500).json({ error: "GEMINI: " + msg });
     }
 
     let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";

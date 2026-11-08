@@ -61,9 +61,9 @@ const handleFindMeal = async () => {
       clearTimeout(timeout);
       if (attempt === 2) {
         if (err.name === "AbortError") {
-          setError("Didi is taking too long — Google is busy right now. Please try again in 30 seconds.");
+          setError("Didi timed out after 25s. Google is slow right now.");
         } else {
-          setError("Didi is busy. Please wait 30 seconds and try again.");
+          setError(err.message); // <-- INTEGRATED: show real error, not fake "Didi is busy"
         }
       } else {
         // First try failed, wait 2 seconds and try again automatically
@@ -90,7 +90,7 @@ const handleGenerateAnother = async () => {
     if (!res.ok) throw new Error(data.error || "Failed");
     setRecipe(data.recipe);
   } catch (err) {
-    setError("Couldn't cook another one. Try again.");
+    setError(err.message); // <-- INTEGRATED: show real error here too
   } finally {
     setIsLoading(false);
   }
