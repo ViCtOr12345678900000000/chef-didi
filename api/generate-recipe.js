@@ -1,4 +1,4 @@
-// api/generate-recipe.js - FREE Gemini version with fallback
+// api/generate-recipe.js - FREE Gemini version
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
@@ -9,7 +9,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "GEMINI_API_KEY is not set on server" });
   }
 
-  const prompt = `
+  try {
+   const prompt = `
 You are Chef Didi, a Nigerian home cook. Return ONLY valid JSON. No markdown.
 
 Ingredients available: ${ingredients.join(", ")}
@@ -51,67 +52,49 @@ youHave = ingredients from the user list that you used.
 youMightNeed = pantry staples only.
 `;
 
-  // Try lite first (1000/day), then 2.5-flash as backup if lite is busy
-  const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"];
-
-  for (const model of MODELS) {
-    try {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7 }
-          })
-        }
-      );
-
-      const geminiData = await geminiRes.json();
-
-      if (!geminiRes.ok) {
-        const msg = geminiData.error?.message || "Gemini failed";
-        console.error(model, msg);
-        // If quota / busy, try next model. If last model, give nice message.
-        if (msg.includes("Quota exceeded") || msg.includes("exceeded") || geminiRes.status === 429) {
-          if (model !== MODELS[MODELS.length - 1]) continue;
-          return res.status(429).json({ error: "Didi has cooked a lot today! Free limit reached. Please try again in a few minutes." });
-        }
-        if (geminiRes.status === 503 || msg.includes("overloaded") || msg.includes("high demand")) {
-          if (model !== MODELS[MODELS.length - 1]) continue;
-          return res.status(503).json({ error: "Didi is busy right now. Please wait 30 seconds and try again." });
-        }
-        if (model !== MODELS[MODELS.length - 1]) continue;
-        return res.status(500).json({ error: "Didi had a small problem. Please try again." });
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7 }
+        })
       }
+    );
 
-      let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-      const recipe = JSON.parse(text);
+    const geminiData = await geminiRes.json();
 
-      const safeRecipe = {
-        id: recipe.id || Date.now().toString(),
-        title: recipe.title || "Chef Didi Recipe",
-        time: recipe.time || "25 mins",
-        servings: recipe.servings || "2 servings",
-        difficulty: recipe.difficulty || "Easy",
-        description: recipe.description || "",
-        youHave: recipe.youHave || ingredients,
-        youMightNeed: recipe.youMightNeed || ["Oil", "Salt"],
-        ingredients: recipe.ingredients || [],
-        steps: recipe.steps || [],
-        tip: recipe.tip || "Taste and adjust seasoning.",
-        variation: recipe.variation || 1,
-      };
-
-      return res.status(200).json({ recipe: safeRecipe });
-    } catch (e) {
-      console.error(model, e);
-      if (model === MODELS[MODELS.length - 1]) {
-        return res.status(500).json({ error: "Didi had a small problem. Please try again." });
-      }
-      // try next model
+    if (!geminiRes.ok) {
+      console.error(geminiData);
+      return res.status(500).json({ error: geminiData.error?.message || "Gemini failed" });
     }
+
+    let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // Remove ```json ... ``` if Gemini adds it
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    const recipe = JSON.parse(text);
+
+    const safeRecipe = {
+      id: recipe.id || Date.now().toString(),
+      title: recipe.title || "Chef Didi Recipe",
+      time: recipe.time || "25 mins",
+      servings: recipe.servings || "2 servings",
+      difficulty: recipe.difficulty || "Easy",
+      description: recipe.description || "",
+      youHave: recipe.youHave || ingredients,
+      youMightNeed: recipe.youMightNeed || ["Oil", "Salt"],
+      ingredients: recipe.ingredients || [],
+      steps: recipe.steps || [],
+      tip: recipe.tip || "Taste and adjust seasoning.",
+      variation: recipe.variation || 1,
+    };
+
+    return res.status(200).json({ recipe: safeRecipe });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e.message || "Failed to generate recipe" });
   }
 }
