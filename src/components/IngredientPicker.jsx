@@ -33,40 +33,47 @@ export default function IngredientPicker() {
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const handleFindMeal = async () => {
-    if (ingPicker.length === 0) return;
-    setRecipe(null);
-    setError("");
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/generate-recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ingredients: ingPicker }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setRecipe(data.recipe);
-    } catch (err) {
-      setError("Couldn't cook that up. Try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const handleFindMeal = async () => {
+  if (ingPicker.length === 0) return;
+  setRecipe(null);
+  setError("");
+  setIsLoading(true);
+  try {
+    const res = await fetch("/api/generate-recipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ingredients: ingPicker }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    setRecipe(data.recipe);
+  } catch (err) {
+    setError("Couldn't cook that up. Try again. " + (err.message || ""));
+  } finally {
+    setIsLoading(false);
+  }
+};
 
 const handleGenerateAnother = async () => {
+  setError("");
   setIsLoading(true);
-  const res = await fetch("/api/generate-recipe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      ingredients: ingPicker, 
-      exclude: recipe?.title // <-- this is what feeds that line
-    }),
-  });
-  const data = await res.json();
-  setRecipe(data.recipe);
-  setIsLoading(false);
+  try {
+    const res = await fetch("/api/generate-recipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        ingredients: ingPicker, 
+        exclude: recipe?.title
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    setRecipe(data.recipe);
+  } catch (err) {
+    setError("Couldn't cook another one. Try again.");
+  } finally {
+    setIsLoading(false);
+  }
 };
 
   const handleClearRecipe = () => {
@@ -188,6 +195,12 @@ const handleGenerateAnother = async () => {
               onGenerateAnother={handleGenerateAnother}
               onClear={handleClearRecipe}
             />
+          )}
+
+          {error && !isLoading && (
+            <div className="bg-red-50 border border-red-200 rounded-3xl p-5 text-center text-[13px] text-red-600 font-bold">
+              {error}
+            </div>
           )}
 
           {!recipe && !isLoading && (
