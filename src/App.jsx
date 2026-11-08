@@ -3,8 +3,8 @@ import IngredientPicker from './components/IngredientPicker';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#F6F5F2] px-4 py-8">
-      <div className="max-w-[560px] mx-auto">
+    <div className="min-h-screen bg-[#F6F5F2] w-[100vw]   py-8">
+      <div className=" ">
 
         <div className="text-center mb-6">
           <div className="w-12 h-12 mx-auto mb-3 rounded-2xl  flex items-center justify-center shadow-lg shadow-emerald-900/20 text-2xl">
