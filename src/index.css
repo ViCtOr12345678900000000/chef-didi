@@ -1,0 +1,8 @@
+@import "tailwindcss";
+.font-display {
+  font-family: 'Fraunces', serif;
+  letter-spacing: -0.02em;
+}
+body {
+  font-family: 'Manrope', sans-serif;
+}
