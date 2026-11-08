@@ -53,7 +53,7 @@ youMightNeed = pantry staples only.
 `;
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,7 +79,6 @@ youMightNeed = pantry staples only.
     }
 
     let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    // Remove ```json ... ``` if Gemini adds it
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
     const recipe = JSON.parse(text);
