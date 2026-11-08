@@ -44,7 +44,7 @@ Return JSON in this exact shape:
   "youHave": ["Chicken", "Onion"],
   "youMightNeed": ["Oil", "Salt"],
   "ingredients": ["1 cup Rice", "2 Eggs"],
-  "steps": ["Step 1...", "Step 2..."],
+  "steps": ["Soak the stockfish...", "Wash the periwinkles..."],
   "tip": "One helpful tip",
   "variation": 1
 }
