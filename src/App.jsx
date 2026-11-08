@@ -11,7 +11,7 @@ export default function App() {
             <ChefHat size={20} />
           </div>
           <h1 className="font-display text-[42px] leading-[1.05] font-semibold text-[#1C1917]">
-            Chef <span className="italic font-medium text-[#1B4332]">Didi</span>
+            Chef <span className="italic font-light text-[#1B4332]">Didi</span>
           </h1>
           <p className="text-stone-500 text-[15px] mt-2 font-light">
             Enter what you have. Didi gives you ONE recipe.

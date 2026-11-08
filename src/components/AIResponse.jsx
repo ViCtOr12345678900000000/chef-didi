@@ -11,7 +11,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear }) {
     <div className="bg-white border border-stone-200 rounded-3xl p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
       <div className="flex items-center gap-2 mb-4">
         <span className="font-display w-7 h-7 rounded-full bg-[#E9EFEA] text-[#1B4332] text-[13px] font-semibold flex items-center justify-center">3</span>
-        <h2 className="font-display font-light text-[19px] text-[#1C1917] md:text-[13px] lg:text-[22px]">AI Response</h2>
+        <h2 className="font-display font-light text-[19px] text-[#1C1917] md:text-[13px] lg:text-[22px]"> <span className="italic font-light text-[#1B4332]">Didi's</span> Response</h2>
         <span className="ml-auto text-[10px] font-bold tracking-wider bg-[#E9EFEA] text-[#1B4332] px-2 py-1 rounded-full md:text-[5px]">ONE RECIPE</span>
       </div>
 

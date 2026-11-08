@@ -207,7 +207,7 @@ const handleGenerateAnother = async () => {
             <div className="bg-white border border-stone-200 rounded-3xl p-5 md:p-6 lg:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#E9EFEA] flex items-center justify-center text-[13px] md:text-[14px] font-semibold text-[#1B4332]">3</span>
-                <h2 className="font-display font-light text-[19px] md:text-[21px] lg:text-[22px]">AI Response</h2>
+                <h2 className="font-display font-light text-[19px] md:text-[21px] lg:text-[22px]"> <span className="italic font-light text-[#1B4332]">Didi's</span> Response</h2>
               </div>
               <div className="bg-[#FAF9F7] border border-stone-100 rounded-2xl py-6 md:py-8 px-3 text-center">
                 <p className="text-[13px] md:text-[14px] font-semibold text-stone-500">Your recipe will appear here.</p>
