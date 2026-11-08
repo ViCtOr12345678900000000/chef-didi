@@ -182,7 +182,7 @@ const handleGenerateAnother = async () => {
             <div className="flex flex-wrap gap-2 md:gap-2.5 mb-4">
               {ingPicker.map((i) => (
                 <div key={i} className="text-[13px] font-bold px-3.5 py-1.5 rounded-full bg-[#E9EFEA] text-[#1B4332] gap-1 font-light items-center flex">
-                  <button onClick={() => handleDelete(i)} className="border rounded-full text-[9px] bg-emerald-50 hover:bg-red-400 hover:text-white hover:border-red-400 text-stone-600 border-stone-600 w-4 h-4 items-center">
+                  <button onClick={() => handleDelete(i)} className="border rounded-full text-[8px] bg-red-500 hover:bg-red-400 hover:text-white hover:border-red-400 text-white/50 border-red-100 w-4 h-4 items-center">
                     x
                   </button> {i}
                 </div>
