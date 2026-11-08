@@ -83,11 +83,25 @@ const handleGenerateAnother = async () => {
   };
 
   return (
-    <div className="w-full flex justify-center px-4">
-      {/* FIXED FOR MD:
-          mobile: stacked
-          md: 3 across BUT flexible, fits 768px - no cut off
-          lg: 3 across with your big widths */}
+    <div className="w-full flex flex-col items-center px-4 bg-inherit bg-[radial-gradient(#E9EFEA_1px,transparent_1px)] [background-size:22px_22px]">
+      
+      {/* HEADER */}
+      <div className="w-full max-w-[1250px] mx-auto pt-8 pb-2 text-center">
+        <p className="text-[11px] font-bold tracking-[0.2em] text-[#1B4332] uppercase">No waste • Use what you have</p>
+        <h1 className="font-display text-[32px] md:text-[42px] leading-tight text-[#1C1917] mt-2">
+          What’s in your kitchen? <span className="italic text-[#1B4332]">Didi will cook it.</span>
+        </h1>
+        <p className="text-[14px] text-stone-500 mt-2 max-w-[600px] mx-auto">
+          Add what you have — Rice, Chicken, Yam, Beans — and Didi makes a real Nigerian recipe with real cooking times. No more “what will I eat today?”
+        </p>
+        <div className="flex justify-center gap-2 mt-4 flex-wrap">
+          <span className="text-[12px] bg-white border border-stone-200 rounded-full px-3 py-1.5">🍚 120+ Recipes</span>
+          <span className="text-[12px] bg-white border border-stone-200 rounded-full px-3 py-1.5">⏱️ Real Times</span>
+          <span className="text-[12px] bg-white border border-stone-200 rounded-full px-3 py-1.5">🇳🇬 Nigerian First</span>
+        </div>
+      </div>
+
+      <div className="w-full flex justify-center px-4">
       <div className="w-full max-w-[1250px] mx-auto py-6 grid grid-cols-1 gap-4 md:flex md:w-500  md:flex-row md:items-start md:justify-center md:gap-4 lg:gap-6">
 
         {/* 1. Add Ingredients */}
@@ -171,7 +185,7 @@ const handleGenerateAnother = async () => {
           )}
         </div>
 
-        {/* 3. AI Response - scrolls inside on md + lg, full height on mobile */}
+        {/* 3. AI Response */}
         <div className="w-full min-w-0 md:flex-1 lg:flex-none lg:w-[430px] lg:shrink-0 md:max-h-[520px] md:w-[350px] md:overflow-y-auto md:pr-1 md:pb-1 space-y-4 rounded-2xl">
           {isLoading && (
             <div className="bg-white border border-stone-200 rounded-3xl p-5 md:p-6 lg:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] animate-pulse">
@@ -217,6 +231,27 @@ const handleGenerateAnother = async () => {
         </div>
 
       </div>
+      </div>
+
+      {/* BOTTOM INFO */}
+      <div className="w-full max-w-[1250px] mx-auto pb-10 grid grid-cols-1 md:grid-cols-3 gap-4 px-1">
+        <div className="bg-white border border-stone-200 rounded-3xl p-5">
+          <p className="text-[20px]">👩🏾‍🍳</p>
+          <h3 className="font-display text-[17px] mt-1">How Didi Works</h3>
+          <p className="text-[13px] text-stone-500 mt-1 leading-relaxed">1. Add ingredients you already have. 2. Didi checks what’s possible. 3. You get a recipe with honest time + steps. No fancy ingredients.</p>
+        </div>
+        <div className="bg-[#1B4332] rounded-3xl p-5 text-white">
+          <p className="text-[20px]">💡</p>
+          <h3 className="font-display text-[17px] mt-1">Didi’s Tip of the Day</h3>
+          <p className="text-[13px] text-white/80 mt-1 leading-relaxed">Always parboil your rice for concoction rice — it stops it from getting soggy and sticking together.</p>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-3xl p-5">
+          <p className="text-[20px]">🔥</p>
+          <h3 className="font-display text-[17px] mt-1">Popular Right Now</h3>
+          <p className="text-[13px] text-stone-500 mt-1 leading-relaxed">Chicken + Rice • Yam + Eggs • Beans + Plantain • Pasta + Chicken. Tap the chips above to try one fast.</p>
+        </div>
+      </div>
+
     </div>
   );
 }
