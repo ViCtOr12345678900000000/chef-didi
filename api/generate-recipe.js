@@ -71,6 +71,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ recipe: safeRecipe });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "Failed to generate recipe" });
-  }
+    return res.status(500).json({ 
+      error: e.message || "Failed to generate recipe",
+      code: e.code || e.status || "unknown"
+    });
+}
 }
