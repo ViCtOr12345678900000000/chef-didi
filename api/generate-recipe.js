@@ -2,12 +2,14 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  const { ingredients, exclude } = req.body;
+  const { ingredients, exclude, mode } = req.body;
   if (!ingredients?.length) return res.status(400).json({ error: "No ingredients" });
 
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({ error: "GEMINI_API_KEY is not set on server" });
   }
+
+  const isWeightLoss = mode === "weightloss";
 
   try {
    const prompt = `
@@ -15,8 +17,27 @@ You are Chef Didi, a Nigerian home cook. Return ONLY valid JSON. No markdown.
 
 Ingredients available: ${ingredients.join(", ")}
 ${exclude ? `Do NOT make: ${exclude}. Make something different.` : ""}
+${isWeightLoss ? `MODE: WEIGHT LOSS FRIENDLY - THIS IS VERY IMPORTANT` : `MODE: NORMAL - Cook the normal delicious Nigerian way`}
 
 Create ONE recipe using ONLY / mostly these ingredients. You can assume Salt, Oil, Water, Pepper are available.
+
+${isWeightLoss ? `
+WEIGHT LOSS RULES - FOLLOW ALL OF THESE, NO EXCEPTIONS:
+- Use VERY little oil: max 1 tablespoon total. Never deep fry. Grill, boil, steam, or air-fry instead of frying.
+- No sugar, no extra Maggi cubes, no butter, no mayonnaise, no heavy stew with lots of palm oil. Use 1 tsp palm oil max if you must.
+- Make it HIGH PROTEIN + HIGH FIBRE: more Chicken, Eggs, Beans, Fish, Vegetables. Less Rice, Yam, Pasta, Plantain. If you must use Rice/Yam, use SMALL portion: 1/2 cup cooked max.
+- Add vegetables to EVERY recipe: Cabbage, Carrots, Spinach, Cucumber, Pepper, Onion.
+- Portion control: Servings must be small. 1 serving = 1 plate, not 2.
+- No sugary drinks, no fried snacks.
+- In "description", say why it is good for weight loss in 1 sentence.
+- In "tip", give 1 weight loss tip (e.g. drink water, eat slowly, don't add extra oil).
+- Be honest: if the user picked mostly Rice + Oil + Plantain, still make the lightest possible version and warn them to eat a small portion.
+` : `
+NORMAL MODE RULES:
+- Cook the normal, delicious Nigerian way. Use normal oil, normal portions.
+- Frying is allowed if the recipe needs it.
+- Make it tasty and filling.
+`}
 
 BE HONEST ABOUT TIME - DO NOT LIE TO SAVE TIME:
 - Nigerian cooking is slow. Never give a fake fast time.
@@ -46,10 +67,14 @@ Return JSON in this exact shape:
   "ingredients": ["1 cup Rice", "2 Eggs"],
   "steps": ["Soak the stockfish...", "Wash the periwinkles..."],
   "tip": "One helpful tip",
-  "variation": 1
+  "variation": 1,
+  "calories": "380 kcal per serving",
+  "mode": "${isWeightLoss ? "weightloss" : "normal"}"
 }
 youHave = ingredients from the user list that you used.
 youMightNeed = pantry staples only.
+DO NOT write "Step 1:" inside steps. Just the action.
+${isWeightLoss ? `calories = estimate honestly. Weight loss recipes should be 300-500 kcal per serving. If it is higher, explain why.` : `calories = estimate honestly.`}
 `;
 
     const geminiRes = await fetch(
@@ -93,9 +118,11 @@ youMightNeed = pantry staples only.
       youHave: recipe.youHave || ingredients,
       youMightNeed: recipe.youMightNeed || ["Oil", "Salt"],
       ingredients: recipe.ingredients || [],
-      steps: recipe.steps || [],
+      steps: (recipe.steps || []).map(s => String(s).replace(/^Step\s*\d+\s*:\s*/i, "").trim()),
       tip: recipe.tip || "Taste and adjust seasoning.",
       variation: recipe.variation || 1,
+      calories: recipe.calories || "",
+      mode: recipe.mode || (isWeightLoss ? "weightloss" : "normal"),
     };
 
     return res.status(200).json({ recipe: safeRecipe });
