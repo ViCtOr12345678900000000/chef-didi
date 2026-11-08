@@ -38,20 +38,40 @@ const handleFindMeal = async () => {
   setRecipe(null);
   setError("");
   setIsLoading(true);
-  try {
-    const res = await fetch("/api/generate-recipe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ingredients: ingPicker }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed");
-    setRecipe(data.recipe);
-  } catch (err) {
-    setError("Couldn't cook that up. Try again. " + (err.message || ""));
-  } finally {
-    setIsLoading(false);
+
+  // Try up to 2 times, max 25 seconds per try
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000); // 25s timeout
+
+    try {
+      const res = await fetch("/api/generate-recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ingredients: ingPicker }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setRecipe(data.recipe);
+      setIsLoading(false);
+      return; // success, stop trying
+    } catch (err) {
+      clearTimeout(timeout);
+      if (attempt === 2) {
+        if (err.name === "AbortError") {
+          setError("Didi is taking too long — Google is busy right now. Please try again in 30 seconds.");
+        } else {
+          setError("Didi is busy. Please wait 30 seconds and try again.");
+        }
+      } else {
+        // First try failed, wait 2 seconds and try again automatically
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
   }
+  setIsLoading(false);
 };
 
 const handleGenerateAnother = async () => {
@@ -191,7 +211,7 @@ const handleGenerateAnother = async () => {
             <div className="bg-white border border-stone-200 rounded-3xl p-5 md:p-6 lg:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.04)] animate-pulse">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#E9EFEA] flex items-center justify-center text-[13px] md:text-[14px] font-semibold text-[#1B4332]">3</span>
-                <h2 className="font-display font-light text-[19px] md:text-[14px] lg:text-[22px]">AI Response</h2>
+                <h2 className="font-display font-light text-[19px] md:text-[14px] lg:text-[22px]"> <span className="italic font-light text-[#1B4332]">Didi's</span> Response</h2>
               </div>
               <div className="bg-[#E9EFEA] rounded-2xl h-28 md:h-32 mb-4"></div>
               <div className="space-y-2">
