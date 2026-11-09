@@ -74,7 +74,10 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     <div className={`w-full bg-gradient-to-b ${theme.page} rounded-[32px] mx-auto max-w-[1400px] relative overflow-hidden`}>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[250px] bg-white/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-2 text-center">
-        <h1 className="font-display text-[34px] md:text-[48px] leading-[1.05] text-white">{t(lang, 'title')} <br /><span className="italic font-light text-white/95">{t(lang, 'subtitle')}</span></h1>
+        <h1 className="font-display text-[34px] md:text-[48px] leading-[1.05] text-white">
+          {t(lang, 'kitchen1')}<br />
+          <span className="italic font-light text-white/95">{t(lang, 'kitchen2')}</span>
+        </h1>
         <p className="text-[14px] text-white/80 mt-3 max-w-[620px] mx-auto">Add what you have — Rice, Chicken, Yam, Beans — and Didi makes a real Nigerian recipe.</p>
         <div className="flex justify-center gap-2 mt-5 flex-wrap">
           <span className="text-[12px] font-semibold bg-white text-[#5A3EC8] shadow-md rounded-full px-3.5 py-1.5 flex items-center gap-1.5"><CookingPot size={12} /> 120+ Recipes</span>

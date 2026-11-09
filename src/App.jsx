@@ -65,7 +65,7 @@ export default function App() {
         </p>
 
         <p className="text-stone-500 text-[15px] mt-3 font-light">
-          Enter what you have. Didi gives you ONE recipe.
+          Enter what you have. Get a recipe.
         </p>
 
         {/* AUTH + SAVED PREFS */}
