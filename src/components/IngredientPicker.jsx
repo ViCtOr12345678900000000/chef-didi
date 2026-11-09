@@ -15,11 +15,10 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [cuisine, setCuisine] = useState("auto");
   const [location, setLocation] = useState("nigeria");
 
-  // --- LAZY MODE ---
   const [showLazy, setShowLazy] = useState(false);
   const [lazyMood, setLazyMood] = useState("light");
   const [lazyPlace, setLazyPlace] = useState("nigerian");
-  const [lazyGoal, setLazyGoal] = useState("normal"); // NEW: Normal / Weight Loss / Weight Gain / Fit
+  const [lazyGoal, setLazyGoal] = useState("normal");
   const [lastSurprise, setLastSurprise] = useState(null);
 
   useEffect(() => {
@@ -57,11 +56,24 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
 
   const handleFindMeal = async () => { if (!ingPicker.length) return; setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true); try { setRecipe(await callAPI()); } catch (e) { setError(e.message); } finally { setIsLoading(false); } };
 
+  // --- LAZY CALORIES: what you picked = what you get ---
+  const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => {
+    const MAP = {
+      weightloss: { light: 350, heavy: 500 },
+      normal: { light: 450, heavy: 650 },
+      fit: { light: 450, heavy: 650 },
+      weightgain: { light: 550, heavy: 800 },
+    };
+    const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450;
+    return { perSitting, total: perSitting * sittings };
+  };
+
   const handleGenerateAnother = async () => {
     setError(""); setIsLoading(true);
     try {
       if (lastSurprise) {
-        setRecipe(await callAPI(recipe?.title, { ...lastSurprise, ingredients: [] }));
+        const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood);
+        setRecipe(await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }));
       } else {
         setRecipe(await callAPI(recipe?.title));
       }
@@ -73,9 +85,10 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     try {
       const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto";
       const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad";
-      const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, ingredients: [] };
+      const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood);
+      const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] };
       setLastSurprise(surprisePayload);
-      setGoal(lazyGoal); // sync SettingsBar too
+      setGoal(lazyGoal);
       const r = await callAPI(null, surprisePayload);
       setRecipe(r);
     } catch (e) { setError(e.message); } finally { setIsLoading(false); }
@@ -145,41 +158,33 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
               <div><h3 className="font-display text-[22px] leading-none flex items-center gap-2"><MoonStar size={20} className={theme.accent} /> Cook For Me</h3><p className="text-[12px] text-stone-400 mt-1">Didi picks a random meal. You just cook.</p></div>
               <button onClick={() => setShowLazy(false)} className="w-8 h-8 bg-stone-100 rounded-full font-bold"><X size={16} className="mx-auto" /></button>
             </div>
-
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-5 mb-2">1. How are you feeling?</p>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setLazyMood("light")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyMood === "light" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Salad size={9} /><p className="text-[13px] font-bold mt-1">Light</p><p className={`text-[11px] ${lazyMood === "light" ? 'text-white/80' : 'text-stone-400'}`}>Salad, soup, grilled</p>
+                <Salad size={20} /><p className="text-[13px] font-bold mt-1">Light</p><p className={`text-[11px] ${lazyMood === "light" ? 'text-white/80' : 'text-stone-400'}`}>Salad, soup, grilled</p>
               </button>
               <button onClick={() => setLazyMood("heavy")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyMood === "heavy" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Soup size={9} /><p className="text-[13px] font-bold mt-1">Heavy</p><p className={`text-[11px] ${lazyMood === "heavy" ? 'text-white/80' : 'text-stone-400'}`}>Swallow, rice, pasta</p>
+                <Soup size={20} /><p className="text-[13px] font-bold mt-1">Heavy</p><p className={`text-[11px] ${lazyMood === "heavy" ? 'text-white/80' : 'text-stone-400'}`}>Swallow, rice, pasta</p>
               </button>
             </div>
-
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-4 mb-2">2. Nigerian or Abroad?</p>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setLazyPlace("nigerian")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyPlace === "nigerian" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Flag size={9} /><p className="text-[13px] font-bold mt-1">Nigerian 🇳🇬</p><p className={`text-[11px] ${lazyPlace === "nigerian" ? 'text-white/80' : 'text-stone-400'}`}>Jollof, Egusi, Ofada</p>
+                <Flag size={20} /><p className="text-[13px] font-bold mt-1">Nigerian 🇳🇬</p><p className={`text-[11px] ${lazyPlace === "nigerian" ? 'text-white/80' : 'text-stone-400'}`}>Jollof, Egusi, Ofada</p>
               </button>
               <button onClick={() => setLazyPlace("abroad")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyPlace === "abroad" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Plane size={9} /><p className="text-[13px] font-bold mt-1">Abroad ✈️</p><p className={`text-[11px] ${lazyPlace === "abroad" ? 'text-white/80' : 'text-stone-400'}`}>Diaspora + world dishes</p>
+                <Plane size={20} /><p className="text-[13px] font-bold mt-1">Abroad ✈️</p><p className={`text-[11px] ${lazyPlace === "abroad" ? 'text-white/80' : 'text-stone-400'}`}>Diaspora + world dishes</p>
               </button>
             </div>
-
-            {/* === 3. GOAL - NEW === */}
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-4 mb-2">3. What&apos;s your goal?</p>
             <div className="grid grid-cols-2 gap-2">
               {Object.values(GOALS).map(g => (
                 <button key={g.id} onClick={() => setLazyGoal(g.id)} className={`h-14 rounded-2xl border-2 text-left px-3 flex items-center gap-2.5 transition ${lazyGoal === g.id ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
                   {GOAL_ICONS[g.id]}
-                  <span>
-                    <span className="block text-[13px] font-bold leading-none">{g.label}</span>
-                    <span className={`block text-[11px] mt-0.5 ${lazyGoal === g.id ? 'text-white/80' : 'text-stone-400'}`}>{g.calories} kcal / day</span>
-                  </span>
+                  <span><span className="block text-[13px] font-bold leading-none">{g.label}</span><span className={`block text-[11px] mt-0.5 ${lazyGoal === g.id ? 'text-white/80' : 'text-stone-400'}`}>{g.calories} kcal / day</span></span>
                 </button>
               ))}
             </div>
-
             <button onClick={handleSurprise} className={`w-full mt-6 h-14 rounded-full bg-gradient-to-r ${theme.btn} text-white font-bold text-[15px] shadow-lg active:scale-[0.98] transition flex items-center justify-center gap-2`}>
               <Dices size={18} /> Surprise Me — {lazyMood === "light" ? "Light" : "Heavy"} • {lazyPlace === "nigerian" ? "Nigerian" : "Abroad"} • {GOALS[lazyGoal]?.label}
             </button>
@@ -187,7 +192,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           </div>
         </div>
       )}
-
       <Footer lang={lang} themeId={themeId} />
     </div>
   );
