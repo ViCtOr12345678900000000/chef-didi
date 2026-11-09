@@ -4,6 +4,7 @@ import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
 import { getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -96,6 +97,7 @@ export default function App() {
 
       {/* IngredientPicker = Purple block + SettingsBar + AI Kcal Calculator + Camera + 3 cards */}
       <IngredientPicker user={user} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} />
+      
 
       {/* Auth Modal */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
