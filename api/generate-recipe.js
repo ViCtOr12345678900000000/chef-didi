@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     { "title": "", "time": "25 mins", "servings": "${sittings} sittings", "difficulty": "Easy", "description": "", "youHave": [], "youMightNeed": ["Oil","Salt"], "ingredients": [], "steps": [], "tip": "", "variation": 1, "calories": "${caloriesPerSitting} kcal", "caloriesPerSitting": "${caloriesPerSitting} kcal", "totalCalories": ${totalCalories}, "mode": "${mode}" }
     `;
 
-    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7 } })
