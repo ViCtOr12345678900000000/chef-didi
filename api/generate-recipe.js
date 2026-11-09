@@ -6,6 +6,9 @@ export default async function handler(req, res) {
 
     const cuisineMode = cuisine || "auto";
     const locationMode = location || "nigeria";
+    const isSurprise = req.body.surprise === true;
+    const mood = req.body.mood || "light"; // light | heavy
+    const safeIngredients = Array.isArray(ingredients) ? ingredients : [];
 
     let cuisineInstruction = "";
     if (cuisineMode === "nigerian") cuisineInstruction = "You MUST create a NIGERIAN dish. Use Nigerian cooking methods, local names, seasonings.";
@@ -38,22 +41,40 @@ export default async function handler(req, res) {
       locationInstruction = `USER IS IN NIGERIA. Use local market ingredients, local names, Naira-friendly quantities. You can use derica, mudu, local measurements.`;
     }
 
-    const prompt = `
+    // --- NORMAL PROMPT ---
+    const normalPrompt = `
     You are Chef Didi.
     ${cuisineInstruction}
     ${locationInstruction}
     Goal: ${mode}, Sittings: ${sittings}, Calories per sitting: ${caloriesPerSitting}, Total: ${totalCalories}, Language: ${lang}
     ${exclude ? `Do NOT return this dish again: ${exclude}` : ""}
-    Ingredients user has: ${ingredients.join(", ")}
+    Ingredients user has: ${safeIngredients.join(", ")}
     Return a real recipe.
     Always return valid JSON ONLY, no markdown, no explanation, in this format:
     { "title": "", "time": "25 mins", "servings": "${sittings} sittings", "difficulty": "Easy", "description": "", "youHave": [], "youMightNeed": ["Oil","Salt"], "ingredients": [], "steps": [], "tip": "", "variation": 1, "calories": "${caloriesPerSitting} kcal", "caloriesPerSitting": "${caloriesPerSitting} kcal", "totalCalories": ${totalCalories}, "mode": "${mode}" }
     `;
 
+    // --- SURPRISE / COOK FOR ME PROMPT ---
+    const surprisePrompt = `
+    You are Chef Didi. User is LAZY and said "Cook For Me".
+    Pick ONE RANDOM surprise dish. Do NOT ask questions. Do NOT use user's ingredients (they gave none).
+    Mood: ${mood === "light" ? "LIGHT - light, fresh, easy, soup, salad, grilled, porridge, not heavy swallow. Under 500 kcal per sitting." : "HEAVY - heavy, filling, swallow, rice, pasta, big chop. Filling, satisfying."}
+    ${cuisineInstruction}
+    ${locationInstruction}
+    Goal: ${mode}, Sittings: ${sittings}, Calories per sitting: ${caloriesPerSitting}, Total: ${totalCalories}, Language: ${lang}
+    ${exclude ? `Do NOT return this dish again: ${exclude}` : ""}
+    IMPORTANT: Be RANDOM. Do not always pick Jollof. Pick from a wide list. Add a fun line in description: "Didi picked this for you because you're lazy today 😴"
+    Return a real recipe.
+    Always return valid JSON ONLY, no markdown, no explanation, in this format:
+    { "title": "", "time": "25 mins", "servings": "${sittings} sittings", "difficulty": "Easy", "description": "", "youHave": [], "youMightNeed": ["Oil","Salt"], "ingredients": [], "steps": [], "tip": "", "variation": 1, "calories": "${caloriesPerSitting} kcal", "caloriesPerSitting": "${caloriesPerSitting} kcal", "totalCalories": ${totalCalories}, "mode": "${mode}" }
+    `;
+
+    const prompt = isSurprise ? surprisePrompt : normalPrompt;
+
     const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7 } })
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9 } })
     });
 
     const geminiData = await geminiRes.json();
@@ -73,7 +94,7 @@ export default async function handler(req, res) {
       servings: recipe.servings || `${sittings} sittings`,
       difficulty: recipe.difficulty || "Easy",
       description: recipe.description || "",
-      youHave: recipe.youHave || ingredients,
+      youHave: recipe.youHave || safeIngredients,
       youMightNeed: recipe.youMightNeed || ["Oil", "Salt"],
       ingredients: recipe.ingredients || [],
       steps: (recipe.steps || []).map(s => String(s).replace(/^Step\s*\d+\s*:\s*/i, "").trim()),
