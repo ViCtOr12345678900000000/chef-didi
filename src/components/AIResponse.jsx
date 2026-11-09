@@ -1,28 +1,34 @@
 import { useState, useEffect } from "react";
-import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check, Copy, MessageCircle } from "lucide-react";
+import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check, Copy, MessageCircle, Pause, Play, Sparkles } from "lucide-react";
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user }) {
   const [fav, setFav] = useState(false);
   const [cookMode, setCookMode] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const [timers, setTimers] = useState({});
+  const [paused, setPaused] = useState({});
   const [swapped, setSwapped] = useState({});
   const [showSwapFor, setShowSwapFor] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addedShop, setAddedShop] = useState(false);
-  useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); }, [recipe?.title]);
+  useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); setPaused({}); }, [recipe?.title]);
   useEffect(() => {
-    const t = setInterval(() => setTimers(prev => { const next = { ...prev }; let changed = false; Object.keys(next).forEach(k => { if (next[k] > 0) { next[k]--; changed = true; } }); return changed ? next : prev; }), 1000);
+    const t = setInterval(() => setTimers(prev => {
+      const next = { ...prev }; let changed = false;
+      Object.keys(next).forEach(k => { if (paused[k]) return; if (next[k] > 0) { next[k]--; changed = true; } });
+      return changed ? next : prev;
+    }), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [paused]);
   if (!recipe) return null;
   const g = GOALS[recipe.mode] || GOALS[goal] || GOALS.normal;
   const theme = THEMES[themeId] || THEMES.purple;
   const cleanSteps = (recipe.steps || []).map(s => String(s).replace(/^Step\s*\d+\s*:\s*/i, "").trim());
   const parseMins = (s) => { const m = s.match(/(\d+)\s*(hour|hr|min|mins|minutes)/i); if (!m) return null; return m[2].toLowerCase().startsWith("hour") ? parseInt(m[1]) * 60 : parseInt(m[1]); };
   const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
-  const startTimer = (i) => { const mins = parseMins(cleanSteps[i]); if (mins) setTimers(p => ({ ...p, [i]: mins * 60 })); };
+  const startTimer = (i) => { const mins = parseMins(cleanSteps[i]); if (mins) { setTimers(p => ({ ...p, [i]: mins * 60 })); setPaused(p => ({ ...p, [i]: false })); } };
+  const togglePause = (i) => setPaused(p => ({ ...p, [i]: !p[i] }));
   const allIngredients = (recipe.ingredients || []).map(x => swapped[x] || x);
   const shareText = `🍲 ${recipe.title} - by Chef Didi\n⏱ ${recipe.time} • 🔥 ${recipe.caloriesPerSitting || recipe.calories}\n\nIngredients:\n${allIngredients.map(x => `• ${x}`).join("\n")}\n\nSteps:\n${cleanSteps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nMade with Chef Didi 💜`;
   const copyShare = async () => { try { await navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { } };
@@ -64,7 +70,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
           </div>
         )}
       </div>
-      <p className="font-bold text-[13px] mb-2">Steps <span className="text-[11px] font-normal text-stone-400">— tap ⏱ if a step has time</span></p>
+      <p className="font-bold text-[13px] mb-2">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
       <div className="space-y-3 mb-4">
         {cleanSteps.map((s, i) => {
           const mins = parseMins(s); const left = timers[i];
@@ -72,13 +78,18 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
             <div key={i} className="flex gap-2.5">
               <span className={`w-6 h-6 shrink-0 rounded-full bg-gradient-to-br ${theme.btn} text-white text-[11px] font-bold flex items-center justify-center`}>{i + 1}</span>
               <div className="flex-1"><p className="text-[13px] text-stone-700">{s}</p>
-                {mins && (left > 0 ? <span className={`inline-flex items-center gap-1 mt-1 text-[11px] font-bold px-2 py-1 rounded-full ${left <= 10 ? "bg-red-100 text-red-600 animate-pulse" : "bg-amber-100 text-amber-700"}`}><Timer size={11} /> {fmt(left)} left {left <= 10 && "— almost done!"}</span> : <button onClick={() => startTimer(i)} className="mt-1 text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full inline-flex items-center gap-1"><Timer size={11} /> Start {mins} min timer</button>)}
+                {mins && (left > 0 ? (
+                  <button onClick={() => togglePause(i)} className={`mt-1 text-[11px] font-bold px-2 py-1 rounded-full inline-flex items-center gap-1 ${paused[i] ? "bg-stone-200 text-stone-600" : left <= 10 ? "bg-red-100 text-red-600 animate-pulse" : "bg-amber-100 text-amber-700"}`}>
+                    {paused[i] ? <Play size={11} /> : <Pause size={11} />}
+                    {paused[i] ? `Timer paused • ${fmt(left)} — tap to resume` : `${fmt(left)} left — tap to pause`}
+                  </button>
+                ) : <button onClick={() => startTimer(i)} className="mt-1 text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full inline-flex items-center gap-1"><Timer size={11} /> Start {mins} min timer</button>)}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="bg-[#F5F0FF] rounded-2xl p-3.5 mb-4"><p className="text-[12px] text-stone-600">💡 <b>Tip:</b> {recipe.tip}</p></div>
+      <div className="bg-[#F5F0FF] rounded-2xl p-3.5 mb-4 flex gap-1.5"><Sparkles size={14} className="shrink-0 mt-0.5 text-[#7B61FF]" /><p className="text-[12px] text-stone-600"><b>Tip:</b> {recipe.tip}</p></div>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button onClick={() => setCookMode(true)} className={`h-11 text-white rounded-full bg-gradient-to-r ${theme.btn} shadow-md flex items-center justify-center gap-1.5 text-[13px] font-bold`}><ChefHat size={15} /> Cook Mode</button>
         <button onClick={() => { addToShopping(user, [...(recipe.youMightNeed || []), ...(recipe.ingredients || [])]); setAddedShop(true); setTimeout(() => setAddedShop(false), 2000); }} className="h-11 bg-white border rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold"><ShoppingCart size={15} /> {addedShop ? "Added ✓" : "Shopping List"}</button>
@@ -102,7 +113,12 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
           <div className="h-2 bg-white/20 rounded-full mt-4 overflow-hidden"><div className={`h-full bg-gradient-to-r ${theme.btn} transition-all`} style={{ width: `${((stepIdx + 1) / cleanSteps.length) * 100}%` }} /></div>
           <div className="flex-1 flex flex-col justify-center">
             <p className="text-[28px] leading-snug font-light">{cleanSteps[stepIdx]}</p>
-            {parseMins(cleanSteps[stepIdx]) && <button onClick={() => startTimer(stepIdx)} className="mt-4 w-fit px-4 py-2 bg-white text-black rounded-full text-[13px] font-bold flex items-center gap-1.5"><Timer size={14} /> {timers[stepIdx] > 0 ? fmt(timers[stepIdx]) : `Start ${parseMins(cleanSteps[stepIdx])} min timer`}</button>}
+            {parseMins(cleanSteps[stepIdx]) && (
+              <button onClick={() => timers[stepIdx] > 0 ? togglePause(stepIdx) : startTimer(stepIdx)} className="mt-4 w-fit px-4 py-2 bg-white text-black rounded-full text-[13px] font-bold flex items-center gap-1.5">
+                {timers[stepIdx] > 0 && paused[stepIdx] ? <Play size={14} /> : timers[stepIdx] > 0 ? <Pause size={14} /> : <Timer size={14} />}
+                {timers[stepIdx] > 0 ? (paused[stepIdx] ? `Timer paused • ${fmt(timers[stepIdx])} — tap to resume` : `${fmt(timers[stepIdx])} — tap to pause`) : `Start ${parseMins(cleanSteps[stepIdx])} min timer`}
+              </button>
+            )}
           </div>
           <p className="text-[12px] text-white/60 mb-3">Ingredients: {allIngredients.slice(0, 4).join(" • ")}</p>
           <div className="flex gap-2 pb-2">
