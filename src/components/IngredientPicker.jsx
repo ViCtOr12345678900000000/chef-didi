@@ -161,19 +161,19 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-5 mb-2">1. How are you feeling?</p>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setLazyMood("light")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyMood === "light" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Salad size={20} /><p className="text-[13px] font-bold mt-1">Light</p><p className={`text-[11px] ${lazyMood === "light" ? 'text-white/80' : 'text-stone-400'}`}>Salad, soup, grilled</p>
+                <Salad size={9} /><p className="text-[13px] font-bold mt-1">Light</p><p className={`text-[11px] ${lazyMood === "light" ? 'text-white/80' : 'text-stone-400'}`}>Salad, soup, grilled</p>
               </button>
               <button onClick={() => setLazyMood("heavy")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyMood === "heavy" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Soup size={20} /><p className="text-[13px] font-bold mt-1">Heavy</p><p className={`text-[11px] ${lazyMood === "heavy" ? 'text-white/80' : 'text-stone-400'}`}>Swallow, rice, pasta</p>
+                <Soup size={9} /><p className="text-[13px] font-bold mt-1">Heavy</p><p className={`text-[11px] ${lazyMood === "heavy" ? 'text-white/80' : 'text-stone-400'}`}>Swallow, rice, pasta</p>
               </button>
             </div>
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-4 mb-2">2. Nigerian or Abroad?</p>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setLazyPlace("nigerian")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyPlace === "nigerian" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Flag size={20} /><p className="text-[13px] font-bold mt-1">Nigerian 🇳🇬</p><p className={`text-[11px] ${lazyPlace === "nigerian" ? 'text-white/80' : 'text-stone-400'}`}>Jollof, Egusi, Ofada</p>
+                <Flag size={9} /><p className="text-[13px] font-bold mt-1">Nigerian 🇳🇬</p><p className={`text-[11px] ${lazyPlace === "nigerian" ? 'text-white/80' : 'text-stone-400'}`}>Jollof, Egusi, Ofada</p>
               </button>
               <button onClick={() => setLazyPlace("abroad")} className={`h-16 rounded-2xl border-2 text-left p-3 transition ${lazyPlace === "abroad" ? `border-transparent bg-gradient-to-r ${theme.btn} text-white shadow-md` : `${theme.softBg} border ${theme.softBorder}`}`}>
-                <Plane size={20} /><p className="text-[13px] font-bold mt-1">Abroad ✈️</p><p className={`text-[11px] ${lazyPlace === "abroad" ? 'text-white/80' : 'text-stone-400'}`}>Diaspora + world dishes</p>
+                <Plane size={9} /><p className="text-[13px] font-bold mt-1">Abroad </p><p className={`text-[11px] ${lazyPlace === "abroad" ? 'text-white/80' : 'text-stone-400'}`}>Diaspora + world dishes</p>
               </button>
             </div>
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mt-4 mb-2">3. What&apos;s your goal?</p>
