@@ -72,3 +72,71 @@ export function loginUser(email, password) {
   if (found.password !== password) throw new Error("Wrong password. Try again.");
   const session = { name: found.name, email: found.email }; localStorage.setItem("didi_session", JSON.stringify(session)); return session;
 }
+function userKey(user, base) { const email = typeof user === "string" ? user : user?.email; return email ? `didi_${base}_${email}` : `didi_${base}_guest`; }
+function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+function writeJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+export function getFavourites(user) { return readJSON(userKey(user, "fav"), []); }
+export function toggleFavourite(user, recipe) {
+  const list = getFavourites(user); const exists = list.find(r => r.title === recipe.title);
+  const next = exists ? list.filter(r => r.title !== recipe.title) : [{ ...recipe, savedAt: Date.now() }, ...list].slice(0, 50);
+  writeJSON(userKey(user, "fav"), next); window.dispatchEvent(new Event("didi-fav-updated")); return !exists;
+}
+export function isFavourite(user, title) { return getFavourites(user).some(r => r.title === title); }
+export function getHistory(user) { return readJSON(userKey(user, "history"), []); }
+export function addHistory(user, recipe) {
+  if (!recipe?.title) return; const list = getHistory(user).filter(r => r.title !== recipe.title);
+  writeJSON(userKey(user, "history"), [{ ...recipe, viewedAt: Date.now() }, ...list].slice(0, 20));
+  window.dispatchEvent(new Event("didi-history-updated"));
+}
+export function getShopping(user) { return readJSON(userKey(user, "shopping"), []); }
+export function addToShopping(user, items) {
+  const list = getShopping(user); const next = [...list];
+  (items || []).forEach(name => { if (!next.find(i => i.name.toLowerCase() === String(name).toLowerCase())) next.push({ id: Date.now() + Math.random(), name, done: false }); });
+  writeJSON(userKey(user, "shopping"), next); window.dispatchEvent(new Event("didi-shopping-updated")); return next;
+}
+export function toggleShopping(user, id) {
+  const next = getShopping(user).map(i => i.id === id ? { ...i, done: !i.done } : i);
+  writeJSON(userKey(user, "shopping"), next); window.dispatchEvent(new Event("didi-shopping-updated")); return next;
+}
+export function clearShopping(user, onlyDone = false) {
+  const next = onlyDone ? getShopping(user).filter(i => !i.done) : [];
+  writeJSON(userKey(user, "shopping"), next); window.dispatchEvent(new Event("didi-shopping-updated")); return next;
+}
+export function getPantry(user) { return readJSON(userKey(user, "pantry"), ["Oil", "Salt", "Onion", "Maggi"]); }
+export function savePantry(user, list) { writeJSON(userKey(user, "pantry"), list); window.dispatchEvent(new Event("didi-pantry-updated")); }
+export function dateStr(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); return d.toISOString().slice(0, 10); }
+export function getStreak(user) {
+  let streak = 0; const email = typeof user === "string" ? user : user?.email;
+  for (let i = 0; i < 30; i++) {
+    const day = dateStr(-i); const oldKey = email ? `didi_kcal_${email}_${day}` : `didi_kcal_guest_${day}`;
+    const items = readJSON(oldKey, []);
+    if (items?.length) streak++; else if (i > 0) break;
+  } return streak;
+}
+export function getWeeklyKcal(user) {
+  const email = typeof user === "string" ? user : user?.email;
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = dateStr(-6 + i); const oldKey = email ? `didi_kcal_${email}_${day}` : `didi_kcal_guest_${day}`;
+    const items = readJSON(oldKey, []);
+    return { day: new Date(day).toLocaleDateString("en", { weekday: "short" }), date: day, total: items.reduce((s, x) => s + (x.totalKcal || 0), 0), count: items.length };
+  });
+}
+export function getWater(user, date = dateStr(0)) { return readJSON(userKey(user, `water_${date}`), 0); }
+export function setWater(user, n, date = dateStr(0)) { writeJSON(userKey(user, `water_${date}`), n); }
+export function getWeights(user) { return readJSON(userKey(user, "weights"), []); }
+export function addWeight(user, kg) {
+  const list = [{ date: dateStr(0), kg: parseFloat(kg), at: Date.now() }, ...getWeights(user)].slice(0, 100);
+  writeJSON(userKey(user, "weights"), list); return list;
+}
+export const SWAPS = {
+  "Parmesan": ["Cheddar", "Pecorino", "Grated Mozzarella"],
+  "Heavy Cream": ["Milk + 1 tbsp Butter", "Coconut Milk", "Evaporated Milk"],
+  "Fettuccine": ["Spaghetti", "Penne", "Rice"],
+  "Palm Oil": ["Vegetable Oil + Paprika", "Groundnut Oil"],
+  "Ugu": ["Baby Spinach", "Kale"], "Crayfish": ["Dried Shrimp", "Fish Powder"],
+  "Scotch Bonnet": ["Habanero", "Chilli"], "Yam": ["Potato", "Sweet Potato"], "Butter": ["Margarine", "Vegetable Oil"],
+};
+export function getSwaps(ing) {
+  const key = Object.keys(SWAPS).find(k => String(ing).toLowerCase().includes(k.toLowerCase()));
+  return key ? SWAPS[key] : ["Onion", "Garlic", "Any similar ingredient"];
+}
