@@ -165,7 +165,7 @@ export default function CalorieCalculator({ user, goal='normal', themeId='purple
               ) : (
                 <>
                   <p className="text-[12px] text-stone-500 text-center mb-3">Looks good? Let Didi see it.</p>
-                  <button onClick={analyzePhoto} disabled={isAnalyzing} className={`w-full h-12 rounded-full text-white font-bold ${isAnalyzing ? 'bg-stone-300' : `bg-gradient-to-r ${theme.btn} shadow-md`}`}>{isAnalyzing ? '🤖 AI is looking at your plate...' : '✦ Let AI Calculate Calories'}</button>
+                  <button onClick={analyzePhoto} disabled={isAnalyzing} className={`w-full h-12 rounded-full text-white font-bold ${isAnalyzing ? 'bg-stone-300' : `bg-gradient-to-r ${theme.btn} shadow-md`}`}>{isAnalyzing ? '🤖 AI is looking at your plate...' : '✦ Let Didi Calculate Calories'}</button>
                   <div className="flex gap-2 mt-2"><button onClick={retake} className="flex-1 h-11 rounded-full bg-[#F5F0FF] font-bold text-[13px]">↩ Retake</button><button onClick={closeCamera} className="flex-1 h-11 rounded-full bg-white border font-bold text-[13px]">Cancel</button></div>
                 </>
               )}
