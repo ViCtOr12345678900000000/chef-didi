@@ -1,39 +1,33 @@
 export const THEMES = {
-  // Royal Violet — your main brand, deep not neon
   purple: {
     name: "Royal Violet",
     page: "from-[#2E1A5E] via-[#4A2C8A] to-[#6D4AC8]",
     btn: "from-[#4A2C8A] to-[#7B61FF]",
   },
-  // Champagne Gold — luxury, not yellow
   gold: {
     name: "Champagne Gold",
     page: "from-[#1A1A2E] via-[#2B2110] to-[#5C4A1E]",
     btn: "from-[#B8963E] to-[#E5C76B]",
   },
-  // Emerald Noir — deep green + black
   emerald: {
     name: "Emerald Noir",
     page: "from-[#06281F] via-[#0B3D2E] to-[#146B4D]",
     btn: "from-[#0B3D2E] to-[#1DB954]",
   },
-  // Sapphire — deep blue, premium
   sapphire: {
     name: "Sapphire",
     page: "from-[#0A1A3A] via-[#122E6B] to-[#2A5BD7]",
     btn: "from-[#122E6B] to-[#3D7BFF]",
   },
-  // Bordeaux — wine / luxury red, NOT pink
   bordeaux: {
     name: "Bordeaux",
     page: "from-[#2A0A14] via-[#4A1224] to-[#7A1F3A]",
     btn: "from-[#5A1A2E] to-[#9B2C4A]",
   },
-  // Obsidian — black + silver, most premium
   obsidian: {
     name: "Obsidian",
     page: "from-[#0A0A0F] via-[#1A1A2E] to-[#2E2E3A]",
-    btn: "from-[#1A1A2E] to-[#4A4A5A]" ,
+    btn: "from-[#1A1A2E] to-[#4A4A5A]",
   },
 };
 
@@ -76,6 +70,7 @@ export function t(lang, key) {
   return TRANSLATIONS[lang]?.[key] || TRANSLATIONS.en[key] || key;
 }
 
+// --- SESSION + PREFS ---
 export function getSession() {
   try { return JSON.parse(localStorage.getItem("didi_session") || "null"); } catch { return null; }
 }
@@ -88,4 +83,37 @@ export function savePrefs(email, prefs) {
 }
 export function logoutUser() {
   localStorage.removeItem("didi_session");
+}
+
+// --- AUTH - THIS WAS MISSING, NOW FIXED ---
+function getUsers() {
+  try { return JSON.parse(localStorage.getItem("didi_users") || "[]"); } catch { return []; }
+}
+function saveUsers(users) {
+  localStorage.setItem("didi_users", JSON.stringify(users));
+}
+
+export function registerUser(name, email, password) {
+  const users = getUsers();
+  const cleanEmail = email.trim().toLowerCase();
+  if (users.find(u => u.email === cleanEmail)) {
+    throw new Error("This email is already registered. Please login instead.");
+  }
+  const newUser = { name: name.trim(), email: cleanEmail, password };
+  users.push(newUser);
+  saveUsers(users);
+  const session = { name: newUser.name, email: newUser.email };
+  localStorage.setItem("didi_session", JSON.stringify(session));
+  return session;
+}
+
+export function loginUser(email, password) {
+  const users = getUsers();
+  const cleanEmail = email.trim().toLowerCase();
+  const found = users.find(u => u.email === cleanEmail);
+  if (!found) throw new Error("No account with this email. Please register first.");
+  if (found.password !== password) throw new Error("Wrong password. Try again.");
+  const session = { name: found.name, email: found.email };
+  localStorage.setItem("didi_session", JSON.stringify(session));
+  return session;
 }
