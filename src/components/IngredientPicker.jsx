@@ -14,35 +14,35 @@ export default function IngredientPicker() {
   const [recipe, setRecipe] = useState(null)
   const [error, setError] = useState("")
 
-const handleFindMeal = async () => {
-  if (ingPicker.length === 0) return;
-  setRecipe(null); setError(""); setIsLoading(true);
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+  const handleFindMeal = async () => {
+    if (ingPicker.length === 0) return;
+    setRecipe(null); setError(""); setIsLoading(true);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
+      try {
+        const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: ingPicker, mode: dietMode }), signal: controller.signal });
+        clearTimeout(timeout);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        setRecipe(data.recipe); setIsLoading(false); return;
+      } catch (err) {
+        clearTimeout(timeout);
+        if (attempt === 2) setError(err.name === "AbortError" ? "Didi timed out after 25s. Google is slow right now." : err.message);
+        else await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    setIsLoading(false);
+  };
+  const handleGenerateAnother = async () => {
+    setError(""); setIsLoading(true);
     try {
-      const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: ingPicker, mode: dietMode }), signal: controller.signal });
-      clearTimeout(timeout);
+      const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: ingPicker, exclude: recipe?.title, mode: dietMode }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setRecipe(data.recipe); setIsLoading(false); return;
-    } catch (err) {
-      clearTimeout(timeout);
-      if (attempt === 2) setError(err.name === "AbortError" ? "Didi timed out after 25s. Google is slow right now." : err.message);
-      else await new Promise(r => setTimeout(r, 2000));
-    }
-  }
-  setIsLoading(false);
-};
-const handleGenerateAnother = async () => {
-  setError(""); setIsLoading(true);
-  try {
-    const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: ingPicker, exclude: recipe?.title, mode: dietMode }) });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed");
-    setRecipe(data.recipe);
-  } catch (err) { setError(err.message); } finally { setIsLoading(false); }
-};
+      setRecipe(data.recipe);
+    } catch (err) { setError(err.message); } finally { setIsLoading(false); }
+  };
   const handleClearRecipe = () => { setRecipe(null); setIngPicker([]); setIsLoading(false); };
 
   return (
@@ -67,7 +67,7 @@ const handleGenerateAnother = async () => {
         <div className="w-full bg-white border border-[#EDEAFF] rounded-[28px] p-5 md:p-6 lg:p-7 shadow-[0_10px_35px_rgba(123,97,255,0.08)]">
           <div className="flex items-center gap-2.5 mb-5">
             <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#7B61FF] to-[#C9B8FF] text-white text-[14px] font-semibold flex items-center justify-center shadow-md shadow-violet-300/40">1</span>
-            <h2 className="font-display font-light text-[21px] lg:text-[23px] text-[#1A1A2E]">Add Ingredients</h2>
+            <h2 className="font-display font-light text-[21px] md:text-[12px] text-[#1A1A2E]">Add Ingredients</h2>
             <span className="ml-auto text-[10px] font-bold tracking-wider text-[#5A3EC8] bg-[#F5F0FF] border border-[#E6E0FF] px-2 py-1 rounded-full">FRESH</span>
           </div>
           <div className="flex gap-2 mb-5">
@@ -91,7 +91,7 @@ const handleGenerateAnother = async () => {
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2.5">
               <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#9B8CFF] to-[#C9B8FF] text-white text-[14px] font-semibold flex items-center justify-center shadow-md shadow-violet-300/40">2</span>
-              <h2 className="font-display font-light text-[21px] lg:text-[23px] text-[#1A1A2E]">Your Ingredients</h2>
+              <h2 className="font-display font-light text-[21px] md:text-[12px] lg:text-[23px] text-[#1A1A2E]">Your Ingredients</h2>
             </div>
             {ingPicker.length > 0 && <span className="text-[11px] font-bold bg-gradient-to-r from-[#7B61FF] to-[#9B8CFF] text-white px-2.5 py-1 rounded-full">{ingPicker.length} picked</span>}
           </div>
@@ -147,7 +147,7 @@ const handleGenerateAnother = async () => {
       </div>
 
       <div className="relative w-full max-w-[1400px] mx-auto px-4 md:px-6 pb-12 pt-2 grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-        <div className="bg-white border border-[#EDEAFF] rounded-[24px] p-5 shadow-sm hover:-translate-y-1 hover:shadow-md transition"><p className="text-[22px]">👩🏾‍🍳</p><h3 className="font-display text-[17px] mt-2 text-[#1A1A2E]">How Didi Works</h3><p className="text-[13px] md:text-[14px] text-stone-500 mt-1.5 leading-relaxed">1. Add ingredients you already have. 2. Pick Normal or Weight Loss. 3. You get a recipe with honest time + steps.</p></div>
+        <div className="bg-white border border-[#EDEAFF] rounded-[24px] p-5 shadow-sm hover:-translate-y-1 hover:shadow-md transition"><p className="text-[22px]">👩🏾‍🍳</p><h3 className="font-display text-[17px] mt-2 text-[#1A1A2E]">How Didi Works</h3><p className="text-[13px] md:text-[14px] lg:text-[22px] text-stone-500 mt-1.5 leading-relaxed">1. Add ingredients you already have. 2. Pick Normal or Weight Loss. 3. You get a recipe with honest time + steps.</p></div>
         <div className="bg-gradient-to-br from-[#7B61FF] via-[#9B8CFF] to-[#C9B8FF] rounded-[24px] p-5 text-white shadow-lg shadow-violet-300/40 hover:-translate-y-1 transition"><p className="text-[22px]">💡</p><h3 className="font-display text-[17px] mt-2">Didi’s Tip of the Day</h3><p className="text-[13px] md:text-[14px] text-white/90 mt-1.5 leading-relaxed">Always parboil your rice for concoction rice — it stops it from getting soggy and sticking together.</p></div>
         <div className="bg-[#F5F0FF] border border-[#EDEAFF] rounded-[24px] p-5 hover:-translate-y-1 transition"><p className="text-[22px]">🔥</p><h3 className="font-display text-[17px] mt-2 text-[#1A1A2E]">Popular Right Now</h3><p className="text-[13px] md:text-[14px] text-stone-500 mt-1.5 leading-relaxed">Chicken + Rice • Yam + Eggs • Beans + Plantain • Pasta + Chicken. Tap the chips above to try one fast.</p></div>
       </div>
