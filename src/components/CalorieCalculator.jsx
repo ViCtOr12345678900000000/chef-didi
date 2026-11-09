@@ -29,12 +29,18 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const streak = getStreak(user);
   const weekly = getWeeklyKcal(user);
   const maxWeek = Math.max(...weekly.map(w => w.total), target);
+  // FIX: reload everything when user logs in / changes - this was the vanish bug
+  useEffect(() => {
+    try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch { setEaten([]); }
+    setWaterState(getWater(user));
+    setWeights(getWeights(user));
+  }, [user?.email, key]);
   useEffect(() => { localStorage.setItem(key, JSON.stringify(eaten)); }, [eaten, key]);
   useEffect(() => {
-    const reload = () => { try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch {} };
+    const reload = () => { try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch {} setWaterState(getWater(user)); setWeights(getWeights(user)); };
     window.addEventListener("didi-kcal-updated", reload);
     return () => window.removeEventListener("didi-kcal-updated", reload);
-  }, [key]);
+  }, [key, user?.email]);
   const handleCalc = async () => {
     if (!text.trim()) return; setErr(""); setIsCalc(true); setAiNote(""); setAiSee("");
     try {
@@ -76,12 +82,12 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
           </div>
           <div className="flex gap-2 mb-3">
             <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Flame size={20} className="mx-auto text-orange-500" /><p className="text-[14px] font-bold mt-1">{streak} day{streak === 1 ? "" : "s"}</p><p className="text-[10px] text-stone-400">Streak</p></div>
-            <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Droplets size={20} className="mx-auto text-blue-500" /><p className="text-[14px] font-bold mt-1">{water} / 8 glasses</p><button onClick={() => { const n = Math.min(12, water + 1); setWaterState(n); setWater(user, n); }} className="mt-1 px-3 h-6 bg-blue-500 text-white rounded-full text-[11px] font-bold flex items-center gap-1 mx-auto"><Plus size={11} /> Add glass</button></div>
+            <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Droplets size={20} className="mx-auto text-blue-500" /><p className="text-[14px] font-bold mt-1">{water} / 8</p><button onClick={() => { const n = Math.min(12, water + 1); setWaterState(n); setWater(user, n); }} className="mt-1 w-7 h-7 bg-blue-500 text-white rounded-full flex items-center justify-center mx-auto"><Plus size={14} /></button></div>
             <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Scale size={20} className="mx-auto text-stone-600" /><p className="text-[14px] font-bold mt-1">{weights[0]?.kg ? `${weights[0].kg} kg` : "—"}</p><p className="text-[10px] text-stone-400">Weight</p></div>
           </div>
           <div className="flex gap-2 mb-3">
             <input value={weightInput} onChange={e => setWeightInput(e.target.value)} placeholder="Log weight (kg)" type="number" className={`flex-1 h-10 px-3 ${theme.softBg} border ${theme.softBorder} rounded-full text-[12px] outline-none`} />
-            <button onClick={() => { if (!weightInput) return; setWeights(addWeight(user, weightInput)); setWeightInput(""); }} className="h-10 px-4 bg-white border rounded-full text-[12px] font-bold">Log Weight</button>
+            <button onClick={() => { if (!weightInput) return; const next = addWeight(user, weightInput); setWeights(next); setWeightInput(""); }} className="h-10 px-4 bg-white border rounded-full text-[12px] font-bold">Log Weight</button>
             <button onClick={() => setShowWeek(!showWeek)} className={`h-10 px-4 rounded-full text-[12px] font-bold ${showWeek ? "bg-[#1A1A2E] text-white" : "bg-white border"}`}>{showWeek ? "Hide Week" : "This Week"}</button>
           </div>
           {showWeek && (

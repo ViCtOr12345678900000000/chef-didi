@@ -25,9 +25,12 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [showShop, setShowShop] = useState(false);
   const [pantry, setPantry] = useState(() => getPantry(user));
   const [pantryInput, setPantryInput] = useState("");
-  useEffect(() => {
-    if (user?.email) { const p = getPrefs(user.email); setGoal(p.goal || "normal"); setThemeId(p.theme || "purple"); setLang(p.lang || "en"); setSittings(p.sittings || 3); setCustomCalories(p.customCalories || null); setCuisine(p.cuisine || "auto"); setLocation(p.location || "nigeria"); setLazyGoal(p.goal || "normal"); }
-  }, [user?.email]);
+useEffect(() => {
+  const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };
+  sync(); // <-- reload immediately when user.email changes, not just on event
+  window.addEventListener("didi-fav-updated", sync); window.addEventListener("didi-history-updated", sync); window.addEventListener("didi-shopping-updated", sync); window.addEventListener("didi-pantry-updated", sync);
+  return () => { window.removeEventListener("didi-fav-updated", sync); window.removeEventListener("didi-history-updated", sync); window.removeEventListener("didi-shopping-updated", sync); window.removeEventListener("didi-pantry-updated", sync); };
+}, [user?.email]);
   useEffect(() => { if (user?.email) savePrefs(user.email, { goal, theme: themeId, lang, sittings, customCalories, cuisine, location }); }, [goal, themeId, lang, sittings, customCalories, cuisine, location, user?.email]);
   useEffect(() => {
     const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };

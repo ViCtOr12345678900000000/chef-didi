@@ -12,7 +12,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addedShop, setAddedShop] = useState(false);
-  useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); setPaused({}); }, [recipe?.title]);
+  useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); setPaused({}); }, [recipe?.title, user?.email]);
   useEffect(() => {
     const t = setInterval(() => setTimers(prev => {
       const next = { ...prev }; let changed = false;
