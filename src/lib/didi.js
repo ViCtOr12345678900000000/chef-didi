@@ -33,7 +33,7 @@ export const THEMES = {
   obsidian: {
     name: "Obsidian",
     page: "from-[#0A0A0F] via-[#1A1A2E] to-[#2E2E3A]",
-    btn: "from-[#1A1A2E] to-[#4A4A5A]",
+    btn: "from-[#1A1A2E] to-[#4A4A5A]" ,
   },
 };
 
