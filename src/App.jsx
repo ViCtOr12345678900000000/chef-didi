@@ -13,7 +13,7 @@ export default function App() {
 
   const theme = THEMES[themeId] || THEMES.purple;
 
-  // On load: if logged in, restore saved prefs -> goal/theme/lang/sittings auto-switch
+  // On load: if logged in, restore saved prefs
   useEffect(() => {
     const s = getSession();
     if (s) {
@@ -25,8 +25,6 @@ export default function App() {
   }, []);
 
   // MIGRATION: copy ALL localStorage to Upstash once
-  // This runs once per user. After this, they are in the real database.
-  // No re-register, no lost theme / favs / history / weights / kcal.
   useEffect(() => {
     const migrate = async () => {
       try {
@@ -38,11 +36,8 @@ export default function App() {
         const users = JSON.parse(
           localStorage.getItem("didi_users") || "[]"
         );
-        const found = users.find(
-          (u) => u.email === email
-        );
+        const found = users.find((u) => u.email === email);
 
-        // Collect kcal for last 30 days
         const kcal = {};
         for (let i = 0; i < 30; i++) {
           const d = new Date();
@@ -58,21 +53,11 @@ export default function App() {
           name: s.name || found?.name || "",
           password: found?.password || "",
           prefs: getPrefs(email),
-          fav: JSON.parse(
-            localStorage.getItem(`didi_fav_${email}`) || "[]"
-          ),
-          history: JSON.parse(
-            localStorage.getItem(`didi_history_${email}`) || "[]"
-          ),
-          shopping: JSON.parse(
-            localStorage.getItem(`didi_shopping_${email}`) || "[]"
-          ),
-          pantry: JSON.parse(
-            localStorage.getItem(`didi_pantry_${email}`) || "[]"
-          ),
-          weights: JSON.parse(
-            localStorage.getItem(`didi_weights_${email}`) || "[]"
-          ),
+          fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
+          history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
+          shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
+          pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
+          weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
           kcal,
           createdAt: new Date().toISOString(),
           migrated: true,
@@ -110,6 +95,8 @@ export default function App() {
     const session = { email: u.email, name: u.name };
     setUser(session);
     setShowAuth(false);
+    // Guest limit reset — they are now a real user
+    localStorage.removeItem("didi_guest_count");
     // Load that user's saved prefs immediately
     const p = getPrefs(u.email);
     setThemeId(p.theme || 'purple');
@@ -126,18 +113,15 @@ export default function App() {
   const prefs = user?.email ? getPrefs(user.email) : null;
 
   // SECRET PAGE - only you know this link: /#my-number
-  // Shows ONLY the number, no words
   if (typeof window !== 'undefined' && window.location.hash === '#my-number') {
     return <MyNumber />;
   }
 
   return (
     <div className="min-h-screen bg-white w-[100vw] py-8 relative">
-      {/* Very faint theme wash at very top only - rest is pure white */}
       <div className={`absolute top-0 left-0 right-0 h-[180px] bg-gradient-to-b ${theme.softBg} to-white pointer-events-none`} />
 
       <div className="relative text-center mb-6 px-4">
-        {/* Theme accent only - icon */}
         <div className={`w-11 h-11 mx-auto mb-3 rounded-xl bg-white border ${theme.softBorder} ${theme.accent} flex items-center justify-center shadow-sm`}>
           <ChefHat size={20} />
         </div>
@@ -154,7 +138,6 @@ export default function App() {
           Enter what you have. Get a recipe.
         </p>
 
-        {/* AUTH + SAVED PREFS */}
         <div className="flex justify-center items-center gap-2 mt-4 flex-wrap">
           {user ? (
             <>
@@ -172,7 +155,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Small hint when logged out */}
         {!user && (
           <p className="text-[11px] text-stone-400 mt-2">
             Login to save your Goal • Theme • Language • Kcal history
@@ -180,10 +162,8 @@ export default function App() {
         )}
       </div>
 
-      {/* IngredientPicker = Theme block + SettingsBar + AI Kcal Calculator + Camera + 3 cards */}
-      <IngredientPicker user={user} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} />
+      <IngredientPicker user={user} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} onRequireAuth={() => setShowAuth(true)} />
 
-      {/* Auth Modal */}
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
 
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">
