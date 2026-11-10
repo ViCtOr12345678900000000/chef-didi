@@ -84,4 +84,45 @@ export default function App() {
           ✦ No waste • Use what you have
         </p>
 
-        <p className="text-stone-500 text
+        <p className="text-stone-500 text-[15px] mt-3 font-light">
+          Enter what you have. Get a recipe.
+        </p>
+
+        {/* AUTH + SAVED PREFS */}
+        <div className="flex justify-center items-center gap-2 mt-4 flex-wrap">
+          {user ? (
+            <>
+              <span className={`text-[12px] font-bold ${theme.softBg} ${theme.accent} px-4 py-2 rounded-full`}>
+                👋 {t(lang, 'welcome')}, {user.name} • {prefs?.goal === 'weightloss' ? '⬇ Weight Loss' : prefs?.goal === 'weightgain' ? '⬆ Weight Gain' : prefs?.goal === 'fit' ? '🏋️ Fit' : '🍲 Normal'} • {prefs?.sittings || 3} sittings
+              </span>
+              <button onClick={handleLogout} className={`text-[12px] font-bold bg-white border ${theme.softBorder} px-4 py-2 rounded-full ${theme.hover} hover:text-white transition`}>
+                {t(lang, 'logout')}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setShowAuth(true)} className={`text-[12px] font-bold bg-gradient-to-r ${theme.btn} text-white px-5 py-2.5 rounded-full shadow-md hover:opacity-90 active:scale-95 transition`}>
+              {t(lang, 'login')} / Register →
+            </button>
+          )}
+        </div>
+
+        {/* Small hint when logged out */}
+        {!user && (
+          <p className="text-[11px] text-stone-400 mt-2">
+            Login to save your Goal • Theme • Language • Kcal history
+          </p>
+        )}
+      </div>
+
+      {/* IngredientPicker = Theme block + SettingsBar + AI Kcal Calculator + Camera + 3 cards */}
+      <IngredientPicker user={user} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} />
+
+      {/* Auth Modal */}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
+
+      <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">
+        Made with 💜 in Lagos • © 2026 Didi • Cook what you have
+      </p>
+    </div>
+  );
+}
