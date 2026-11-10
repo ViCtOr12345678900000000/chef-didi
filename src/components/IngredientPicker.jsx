@@ -29,13 +29,21 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [pantryInput, setPantryInput] = useState("");
   const [guestCount, setGuestCount] = useState(() => parseInt(localStorage.getItem("didi_guest_count") || "0"));
 
-  // Helper: if guest, open login instead of doing the action
   const needAuth = () => {
     if (isGuest) {
       onRequireAuth?.();
       return true;
     }
     return false;
+  };
+
+  // LOCKED CUSTOM KCAL: guests cannot set it
+  const handleCustomCalories = (val) => {
+    if (isGuest) {
+      onRequireAuth?.();
+      return;
+    }
+    setCustomCalories(val);
   };
 
   const bumpGuestCount = () => {
@@ -74,7 +82,6 @@ useEffect(() => {
 
   const handleFindMeal = async () => {
     if (!ingPicker.length) return;
-    // GUEST LIMIT: 2 free recipes
     if (isGuest && guestCount >= 2) {
       setError("You've used your 2 free recipes. Login / Register to keep cooking — it's free.");
       onRequireAuth?.();
@@ -93,7 +100,7 @@ useEffect(() => {
   };
 
   const handleSurprise = async () => {
-    if (needAuth()) return; // Lazy Mode = locked
+    if (needAuth()) return;
     setShowLazy(false); setRecipe(null); setError(""); setIsLoading(true);
     try { const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto"; const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad"; const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood); const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }; setLastSurprise(surprisePayload); setGoal(lazyGoal); const r = await callAPI(null, surprisePayload); setRecipe(r); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
@@ -126,7 +133,7 @@ useEffect(() => {
           <span className={`text-[12px] font-semibold bg-white ${theme.accent} rounded-full px-3.5 py-1.5 flex items-center gap-1.5`}><Globe size={12} /> World + Nigerian</span>
         </div>
       </div>
-      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-5"><SettingsBar goal={goal} setGoal={setGoal} sittings={sittings} setSittings={setSittings} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} user={user} customCalories={customCalories} setCustomCalories={setCustomCalories} /></div>
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-5"><SettingsBar goal={goal} setGoal={setGoal} sittings={sittings} setSittings={setSittings} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} user={user} customCalories={customCalories} setCustomCalories={handleCustomCalories} /></div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
         {isGuest ? (
           <div className="bg-white rounded-[24px] p-4 shadow-xl flex items-center justify-between gap-3">
