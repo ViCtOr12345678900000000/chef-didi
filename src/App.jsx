@@ -24,6 +24,72 @@ export default function App() {
     }
   }, []);
 
+  // MIGRATION: copy ALL localStorage to Upstash once
+  // This runs once per user. After this, they are in the real database.
+  // No re-register, no lost theme / favs / history / weights / kcal.
+  useEffect(() => {
+    const migrate = async () => {
+      try {
+        const s = getSession();
+        if (!s?.email) return;
+        if (localStorage.getItem("didi-migrated")) return;
+
+        const email = s.email.toLowerCase();
+        const users = JSON.parse(
+          localStorage.getItem("didi_users") || "[]"
+        );
+        const found = users.find(
+          (u) => u.email === email
+        );
+
+        // Collect kcal for last 30 days
+        const kcal = {};
+        for (let i = 0; i < 30; i++) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const day = d.toISOString().slice(0, 10);
+          const key = `didi_kcal_${email}_${day}`;
+          const val = localStorage.getItem(key);
+          if (val) kcal[day] = JSON.parse(val);
+        }
+
+        const bundle = {
+          email,
+          name: s.name || found?.name || "",
+          password: found?.password || "",
+          prefs: getPrefs(email),
+          fav: JSON.parse(
+            localStorage.getItem(`didi_fav_${email}`) || "[]"
+          ),
+          history: JSON.parse(
+            localStorage.getItem(`didi_history_${email}`) || "[]"
+          ),
+          shopping: JSON.parse(
+            localStorage.getItem(`didi_shopping_${email}`) || "[]"
+          ),
+          pantry: JSON.parse(
+            localStorage.getItem(`didi_pantry_${email}`) || "[]"
+          ),
+          weights: JSON.parse(
+            localStorage.getItem(`didi_weights_${email}`) || "[]"
+          ),
+          kcal,
+          createdAt: new Date().toISOString(),
+          migrated: true,
+        };
+
+        await fetch("/api/migrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bundle),
+        });
+
+        localStorage.setItem("didi-migrated", "1");
+      } catch (e) {}
+    };
+    migrate();
+  }, []);
+
   // Count 1 visit per person per session - but NOT when you open the secret page
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash === '#my-number') {
