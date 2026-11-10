@@ -13,6 +13,21 @@ export default function App() {
 
   const theme = THEMES[themeId] || THEMES.purple;
 
+  // LOCK: helper - must be logged in
+  const requireLogin = () => {
+    if (!user) {
+      setShowAuth(true);
+      return false;
+    }
+    return true;
+  };
+
+  // LOCKED THEME: guests cannot change theme
+  const handleThemeChange = (newTheme) => {
+    if (!requireLogin()) return;
+    setThemeId(newTheme);
+  };
+
   // On load: if logged in, restore saved prefs
   useEffect(() => {
     const s = getSession();
@@ -24,7 +39,7 @@ export default function App() {
     }
   }, []);
 
-  // MIGRATION: copy ALL localStorage to Upstash once
+  // MIGRATION: copy ALL localStorage to Upstash once - FIXED FORMAT
   useEffect(() => {
     const migrate = async () => {
       try {
@@ -63,10 +78,11 @@ export default function App() {
           migrated: true,
         };
 
+        // Send as users array so login/admin can read it correctly
         await fetch("/api/migrate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bundle),
+          body: JSON.stringify({ users: [bundle] }),
         });
 
         localStorage.setItem("didi-migrated", "1");
@@ -95,9 +111,7 @@ export default function App() {
     const session = { email: u.email, name: u.name };
     setUser(session);
     setShowAuth(false);
-    // Guest limit reset — they are now a real user
     localStorage.removeItem("didi_guest_count");
-    // Load that user's saved prefs immediately
     const p = getPrefs(u.email);
     setThemeId(p.theme || 'purple');
     setLang(p.lang || 'en');
@@ -112,7 +126,6 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
-  // SECRET PAGE - only you know this link: /#my-number
   if (typeof window !== 'undefined' && window.location.hash === '#my-number') {
     return <MyNumber />;
   }
@@ -162,7 +175,14 @@ export default function App() {
         )}
       </div>
 
-      <IngredientPicker user={user} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} onRequireAuth={() => setShowAuth(true)} />
+      <IngredientPicker 
+        user={user} 
+        themeId={themeId} 
+        setThemeId={handleThemeChange} 
+        lang={lang} 
+        setLang={setLang} 
+        onRequireAuth={() => setShowAuth(true)} 
+      />
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
 
