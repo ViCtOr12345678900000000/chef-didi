@@ -1,74 +1,70 @@
 import { useEffect, useState } from "react";
 
 export default function MyNumber() {
-  const [count, setCount] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [time, setTime] = useState("");
+  const [data, setData] = useState(null);
 
   const load = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/my-number");
-      const data = await res.json();
-      setCount(data.count);
-      const now = new Date();
-      setTime(now.toLocaleTimeString());
-    } catch (e) {
-      setCount(null);
-    }
-    setLoading(false);
+    const res = await fetch("/api/my-number");
+    const json = await res.json();
+    setData(json);
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
+
+  if (!data) return (
+    <div style={{ background: "#111110", color: "white", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      Loading...
+    </div>
+  );
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{ background: "#111110", color: "white" }}
-    >
-      <p className="text-[11px] tracking-[4px] text-stone-500">
-        PRIVATE
+    <div style={{ background: "#111110", color: "white", minHeight: "100vh", padding: "24px" }}>
+      <p style={{ fontSize: "11px", letterSpacing: "4px", color: "#777" }}>
+        PRIVATE ADMIN
       </p>
 
-      <p className="text-stone-400 text-sm mt-8">
-        Total Visitors
-      </p>
-
-      <h1
-        className="font-light leading-none mt-2"
-        style={{ fontSize: "140px" }}
-      >
-        {loading ? "..." : count}
+      <h1 style={{ fontSize: "80px", fontWeight: "300", margin: "10px 0 0" }}>
+        {data.count}
       </h1>
+      <p style={{ color: "#999" }}>Total Visitors</p>
 
-      <div className="w-10 h-[1px] bg-stone-700 my-8" />
-
-      <p className="text-stone-500 text-xs">
-        Chef Didi
-      </p>
-
-      <p className="text-stone-600 text-[11px] mt-1">
-        Last checked: {time || "just now"}
-      </p>
-
-      <button
-        onClick={load}
-        className="mt-10 px-6 py-3 rounded-full text-sm"
-        style={{
-          background: "white",
-          color: "black",
-        }}
-      >
+      <button onClick={load} style={{ marginTop: "16px", background: "white", color: "black", padding: "10px 20px", borderRadius: "999px", border: "none" }}>
         Refresh
       </button>
 
-      <p className="text-stone-700 text-[11px] mt-10 text-center">
-        Only you know this link.
-        <br />
-        Do not share it.
-      </p>
+      <h2 style={{ marginTop: "40px" }}>
+        Visitors ({data.visitors.length})
+      </h2>
+
+      {data.visitors.map((v, i) => (
+        <div key={i} style={{ borderBottom: "1px solid #222", padding: "12px 0" }}>
+          <p style={{ margin: 0 }}>
+            {v.city}, {v.country} — {v.device}
+          </p>
+          <p style={{ margin: 0, color: "#777", fontSize: "12px" }}>
+            {new Date(v.time).toLocaleString()}
+          </p>
+        </div>
+      ))}
+
+      <h2 style={{ marginTop: "40px" }}>
+        Registered Users ({data.users.length})
+      </h2>
+
+      {data.users.length === 0 && (
+        <p style={{ color: "#777" }}>
+          No registered users yet.
+        </p>
+      )}
+
+      {data.users.map((u, i) => (
+        <div key={i} style={{ borderBottom: "1px solid #222", padding: "12px 0" }}>
+          <p style={{ margin: 0 }}>{u.name} — {u.email}</p>
+          <p style={{ margin: 0, color: "#777", fontSize: "12px" }}>
+            {new Date(u.createdAt).toLocaleString()}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
