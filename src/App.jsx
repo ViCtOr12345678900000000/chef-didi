@@ -13,7 +13,6 @@ export default function App() {
 
   const theme = THEMES[themeId] || THEMES.purple;
 
-  // LOCK: helper - must be logged in
   const requireLogin = () => {
     if (!user) {
       setShowAuth(true);
@@ -22,13 +21,11 @@ export default function App() {
     return true;
   };
 
-  // LOCKED THEME: guests cannot change theme
   const handleThemeChange = (newTheme) => {
     if (!requireLogin()) return;
     setThemeId(newTheme);
   };
 
-  // On load: if logged in, restore saved prefs
   useEffect(() => {
     const s = getSession();
     if (s) {
@@ -39,70 +36,81 @@ export default function App() {
     }
   }, []);
 
-  // MIGRATION: copy ALL localStorage to Upstash once - FIXED FORMAT
+  // SHARED MIGRATION LOGIC - used by auto-migrate + Sync button
+  const doMigrate = async (force = false) => {
+    try {
+      const s = getSession();
+      if (!s?.email) return { ok: false, reason: 'no session' };
+      if (!force && localStorage.getItem("didi-migrated")) return { ok: false, reason: 'already flagged' };
+
+      const email = s.email.toLowerCase();
+      const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
+      const found = users.find((u) => u.email === email);
+
+      const kcal = {};
+      for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const day = d.toISOString().slice(0, 10);
+        const key = `didi_kcal_${email}_${day}`;
+        const val = localStorage.getItem(key);
+        if (val) kcal[day] = JSON.parse(val);
+      }
+
+      const bundle = {
+        email,
+        name: s.name || found?.name || "",
+        password: found?.password || "",
+        prefs: getPrefs(email),
+        fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
+        history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
+        shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
+        pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
+        weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
+        kcal,
+        createdAt: new Date().toISOString(),
+        migrated: true,
+      };
+
+      console.log("Pushing to Upstash:", email, "password found?", !!bundle.password);
+
+      const res = await fetch("/api/migrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users: [bundle] }),
+      });
+
+      if (!res.ok) return { ok: false, reason: 'api failed ' + res.status };
+      localStorage.setItem("didi-migrated", "1");
+      return { ok: true, hasPassword: !!bundle.password };
+    } catch (e) {
+      return { ok: false, reason: String(e) };
+    }
+  };
+
+  // AUTO MIGRATION on load
   useEffect(() => {
-    const migrate = async () => {
-      try {
-        const s = getSession();
-        if (!s?.email) return;
-        if (localStorage.getItem("didi-migrated")) return;
-
-        const email = s.email.toLowerCase();
-        const users = JSON.parse(
-          localStorage.getItem("didi_users") || "[]"
-        );
-        const found = users.find((u) => u.email === email);
-
-        const kcal = {};
-        for (let i = 0; i < 30; i++) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const day = d.toISOString().slice(0, 10);
-          const key = `didi_kcal_${email}_${day}`;
-          const val = localStorage.getItem(key);
-          if (val) kcal[day] = JSON.parse(val);
-        }
-
-        const bundle = {
-          email,
-          name: s.name || found?.name || "",
-          password: found?.password || "",
-          prefs: getPrefs(email),
-          fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
-          history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
-          shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
-          pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
-          weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
-          kcal,
-          createdAt: new Date().toISOString(),
-          migrated: true,
-        };
-
-        // Send as users array so login/admin can read it correctly
-        await fetch("/api/migrate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ users: [bundle] }),
-        });
-
-        localStorage.setItem("didi-migrated", "1");
-      } catch (e) {}
-    };
-    migrate();
+    doMigrate(false);
   }, []);
 
-  // Count 1 visit per person per session - but NOT when you open the secret page
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash === '#my-number') {
-      return;
+  // FORCE SYNC BUTTON - for phone
+  const handleForceSync = async () => {
+    const result = await doMigrate(true);
+    if (result.ok) {
+      alert(`✅ Synced to Upstash! Password saved: ${result.hasPassword ? 'YES' : 'NO - SEE WARNING BELOW'}\n\nNow try login in Incognito.`);
+    } else {
+      alert(`❌ Sync failed: ${result.reason}`);
     }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#my-number') return;
     if (!sessionStorage.getItem('didi-counted')) {
       sessionStorage.setItem('didi-counted', '1');
       fetch('/api/track').catch(() => {});
     }
   }, []);
 
-  // Save theme + lang even when user changes them in Picker
   useEffect(() => {
     if (user?.email) savePrefs(user.email, { theme: themeId, lang });
   }, [themeId, lang, user?.email]);
@@ -115,6 +123,8 @@ export default function App() {
     const p = getPrefs(u.email);
     setThemeId(p.theme || 'purple');
     setLang(p.lang || 'en');
+    // Try migrate right after login too
+    setTimeout(() => doMigrate(false), 500);
   };
 
   const handleLogout = () => {
@@ -157,6 +167,9 @@ export default function App() {
               <span className={`text-[12px] font-bold ${theme.softBg} ${theme.accent} px-4 py-2 rounded-full`}>
                 👋 {t(lang, 'welcome')}, {user.name} • {prefs?.goal === 'weightloss' ? '⬇ Weight Loss' : prefs?.goal === 'weightgain' ? '⬆ Weight Gain' : prefs?.goal === 'fit' ? '🏋️ Fit' : '🍲 Normal'} • {prefs?.sittings || 3} sittings
               </span>
+              <button onClick={handleForceSync} className="text-[12px] font-bold bg-red-500 text-white px-4 py-2 rounded-full">
+                🔄 Sync to Cloud
+              </button>
               <button onClick={handleLogout} className={`text-[12px] font-bold bg-white border ${theme.softBorder} px-4 py-2 rounded-full ${theme.hover} hover:text-white transition`}>
                 {t(lang, 'logout')}
               </button>
