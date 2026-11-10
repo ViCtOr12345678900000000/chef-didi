@@ -1,12 +1,79 @@
 import { useState } from "react";
 
-// Local auth - no import from didi.js, so no MISSING_EXPORT ever
+// Local helpers - keep localStorage as offline cache
 function getUsers() {
   try { return JSON.parse(localStorage.getItem("didi_users") || "[]"); } catch { return []; }
 }
 function saveUsers(users) {
   localStorage.setItem("didi_users", JSON.stringify(users));
 }
+function saveSession(session) {
+  localStorage.setItem("didi_session", JSON.stringify(session));
+}
+
+async function syncToUpstash(user, isNew) {
+  try {
+    // New users: create in Upstash. Old users: migration already handled in App.jsx
+    if (!isNew) return;
+    await fetch("/api/migrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        name: user.name,
+        password: user.password || "",
+        prefs: {},
+        fav: [],
+        history: [],
+        shopping: [],
+        pantry: ["Oil", "Salt", "Onion", "Maggi"],
+        weights: [],
+        kcal: {},
+        createdAt: new Date().toISOString(),
+        migrated: false,
+      }),
+    });
+    localStorage.setItem("didi-migrated", "1");
+  } catch (e) {}
+}
+
+async function loginUserLocalOrCloud(email, password) {
+  const cleanEmail = email.trim().toLowerCase();
+  // 1. Try local first - fast, works offline
+  const users = getUsers();
+  const found = users.find(u => u.email === cleanEmail);
+  if (found) {
+    if (found.password !== password) throw new Error("Wrong password. Try again.");
+    const session = { name: found.name, email: found.email };
+    saveSession(session);
+    return session;
+  }
+  // 2. Not local? Try Upstash - user registered on another phone
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "No account with this email. Please register first.");
+    // Cache it locally so next login is instant
+    const all = getUsers();
+    all.push({ name: data.user.name, email: cleanEmail, password });
+    saveUsers(all);
+    if (data.user.prefs) {
+      localStorage.setItem(`didi_prefs_${cleanEmail}`, JSON.stringify(data.user.prefs));
+    }
+    const session = { name: data.user.name, email: cleanEmail };
+    saveSession(session);
+    return session;
+  } catch (e) {
+    // If /api/login doesn't exist yet, fall back to clear message
+    if (e.message.includes("No account")) throw e;
+    throw new Error("No account with this email on this device. Please register first.");
+  }
+}
+
 function registerUserLocal(name, email, password) {
   const users = getUsers();
   const cleanEmail = email.trim().toLowerCase();
@@ -15,18 +82,8 @@ function registerUserLocal(name, email, password) {
   users.push(newUser);
   saveUsers(users);
   const session = { name: newUser.name, email: newUser.email };
-  localStorage.setItem("didi_session", JSON.stringify(session));
-  return session;
-}
-function loginUserLocal(email, password) {
-  const users = getUsers();
-  const cleanEmail = email.trim().toLowerCase();
-  const found = users.find(u => u.email === cleanEmail);
-  if (!found) throw new Error("No account with this email. Please register first.");
-  if (found.password !== password) throw new Error("Wrong password. Try again.");
-  const session = { name: found.name, email: found.email };
-  localStorage.setItem("didi_session", JSON.stringify(session));
-  return session;
+  saveSession(session);
+  return { session, newUser };
 }
 
 export default function AuthModal({ onClose, onAuth }) {
@@ -35,22 +92,29 @@ export default function AuthModal({ onClose, onAuth }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErr("");
+    setLoading(true);
     try {
       let user;
       if (isLogin) {
-        user = loginUserLocal(email, password);
+        user = await loginUserLocalOrCloud(email, password);
       } else {
         if (!name.trim()) throw new Error("Please enter your name.");
         if (password.length < 4) throw new Error("Password must be at least 4 characters.");
-        user = registerUserLocal(name, email, password);
+        const { session, newUser } = registerUserLocal(name, email, password);
+        // Fire-and-forget to Upstash so new user is in the real DB
+        syncToUpstash(newUser, true);
+        user = session;
       }
       onAuth(user);
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,7 +124,7 @@ export default function AuthModal({ onClose, onAuth }) {
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-[24px] font-bold text-[#1A1A2E]">{isLogin ? "Welcome back 👋" : "Join Chef Didi 👩🏾‍🍳"}</h2>
-            <p className="text-[13px] text-stone-400 mt-1">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to save your preferences"}</p>
+            <p className="text-[13px] text-stone-400 mt-1">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to unlock Favourites, Shopping, Kcal & more"}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button>
         </div>
@@ -74,14 +138,16 @@ export default function AuthModal({ onClose, onAuth }) {
 
           {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
 
-          <button type="submit" className="w-full h-12 bg-gradient-to-r from-[#4A2C8A] to-[#7B61FF] text-white rounded-full font-bold text-[14px] shadow">
-            {isLogin ? "Login →" : "Create Account →"}
+          <button type="submit" disabled={loading} className="w-full h-12 bg-gradient-to-r from-[#4A2C8A] to-[#7B61FF] text-white rounded-full font-bold text-[14px] shadow disabled:opacity-60">
+            {loading ? "Please wait..." : isLogin ? "Login →" : "Create Account →"}
           </button>
         </form>
 
         <button onClick={() => { setIsLogin(!isLogin); setErr(""); }} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-4">
           {isLogin ? "No account? Create one →" : "Already have account? Login →"}
         </button>
+
+        {!isLogin && <p className="text-[11px] text-center text-stone-400 mt-3">🔒 Register once, unlock Favourites, Shopping, Pantry, Weight, Water & Kcal History</p>}
       </div>
     </div>
   );
