@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ChefHat } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
@@ -49,6 +50,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white w-[100vw] py-8 relative">
+      <Analytics />
       {/* Very faint theme wash at very top only - rest is pure white */}
       <div className={`absolute top-0 left-0 right-0 h-[180px] bg-gradient-to-b ${theme.softBg} to-white pointer-events-none`} />
 
