@@ -1,41 +1,21 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { users } = req.body || {};
+  if (!Array.isArray(users)) return res.status(400).json({ error: 'users must be array' });
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const headers = {
-    Authorization: `Bearer ${token}`,
-  };
 
-  const bundle = req.body;
-  if (!bundle.email) {
-    return res.status(400).json({ ok: false });
+  for (const u of users) {
+    if (!u?.email) continue;
+    const email = u.email.toLowerCase().trim();
+    // Save each user individually, not as one giant array
+    await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify({ ...u, email }))}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    await fetch(`${url}/set/migrated:${encodeURIComponent(email)}/1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
   }
-
-  // Check if already migrated
-  const check = await fetch(
-    `${url}/get/migrated:${bundle.email}`,
-    { headers }
-  ).then((r) => r.json());
-
-  if (check.result === "1") {
-    return res.status(200).json({ ok: true, already: true });
-  }
-
-  const encoded = encodeURIComponent(
-    JSON.stringify(bundle)
-  );
-
-  await fetch(`${url}/lpush/users/${encoded}`, {
-    headers,
-  });
-
-  await fetch(
-    `${url}/set/migrated:${bundle.email}/1`,
-    { headers }
-  );
-
   return res.status(200).json({ ok: true });
 }
