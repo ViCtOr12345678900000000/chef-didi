@@ -1,4 +1,4 @@
-import { Search, PlusCircleIcon, Delete, Clock, CookingPot, UtensilsCrossed, TrendingDown, TrendingUp, Dumbbell, Sparkles, X, MoonStar, Salad, Soup, Flag, Plane, Dices, Globe, Heart, History, ShoppingCart, Check } from "lucide-react";
+import { Search, PlusCircleIcon, Delete, Clock, CookingPot, UtensilsCrossed, TrendingDown, TrendingUp, Dumbbell, Sparkles, X, MoonStar, Salad, Soup, Flag, Plane, Dices, Globe, Heart, History, ShoppingCart, Check, Lock } from "lucide-react";
 import { useState, useEffect } from "react";
 import AIResponse from "./AIResponse";
 import Footer from "./Footer";
@@ -6,7 +6,9 @@ import SettingsBar from "./SettingsBar";
 import CalorieCalculator from "./CalorieCalculator";
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, savePrefs, caloriesFor, getFavourites, getHistory, getShopping, toggleShopping, clearShopping, getPantry, savePantry, addHistory } from "../lib/didi";
 const GOAL_ICONS = { normal: <UtensilsCrossed size={15} />, weightloss: <TrendingDown size={16} />, weightgain: <TrendingUp size={16} />, fit: <Dumbbell size={16} /> };
-export default function IngredientPicker({ user, themeId, setThemeId, lang, setLang }) {
+
+export default function IngredientPicker({ user, themeId, setThemeId, lang, setLang, onRequireAuth }) {
+  const isGuest = !user?.email;
   const [goal, setGoal] = useState("normal");
   const [sittings, setSittings] = useState(3);
   const [customCalories, setCustomCalories] = useState(null);
@@ -25,9 +27,27 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [showShop, setShowShop] = useState(false);
   const [pantry, setPantry] = useState(() => getPantry(user));
   const [pantryInput, setPantryInput] = useState("");
+  const [guestCount, setGuestCount] = useState(() => parseInt(localStorage.getItem("didi_guest_count") || "0"));
+
+  // Helper: if guest, open login instead of doing the action
+  const needAuth = () => {
+    if (isGuest) {
+      onRequireAuth?.();
+      return true;
+    }
+    return false;
+  };
+
+  const bumpGuestCount = () => {
+    if (!isGuest) return;
+    const next = guestCount + 1;
+    setGuestCount(next);
+    localStorage.setItem("didi_guest_count", String(next));
+  };
+
 useEffect(() => {
   const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };
-  sync(); // <-- reload immediately when user.email changes, not just on event
+  sync();
   window.addEventListener("didi-fav-updated", sync); window.addEventListener("didi-history-updated", sync); window.addEventListener("didi-shopping-updated", sync); window.addEventListener("didi-pantry-updated", sync);
   return () => { window.removeEventListener("didi-fav-updated", sync); window.removeEventListener("didi-history-updated", sync); window.removeEventListener("didi-shopping-updated", sync); window.removeEventListener("didi-pantry-updated", sync); };
 }, [user?.email]);
@@ -44,32 +64,62 @@ useEffect(() => {
   const [isLoading, setIsLoading] = useState(false);
   const [recipe, setRecipe] = useState(null);
   const [error, setError] = useState("");
-  useEffect(() => { if (recipe?.title) addHistory(user, recipe); }, [recipe?.title]);
+  useEffect(() => { if (recipe?.title && user?.email) addHistory(user, recipe); }, [recipe?.title]);
   const handleAdd = (ing) => setIngPicker(prev => prev.includes(ing) ? prev : [...prev, ing]);
   const addBtn = () => { if (!inputValue.trim()) return; handleAdd(inputValue.trim()); setInputValue(""); };
   const callAPI = async (exclude, extra = {}) => {
     const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: ingPicker, exclude, mode: goal, sittings, caloriesPerSitting: cal.perSitting, totalCalories: cal.total, lang, customCalories: cal.total, cuisine, location, ...extra }), });
     const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed"); return data.recipe;
   };
-  const handleFindMeal = async () => { if (!ingPicker.length) return; setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true); try { setRecipe(await callAPI()); } catch (e) { setError(e.message); } finally { setIsLoading(false); } };
-  const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => { const MAP = { weightloss: { light: 350, heavy: 500 }, normal: { light: 450, heavy: 650 }, fit: { light: 450, heavy: 650 }, weightgain: { light: 550, heavy: 800 } }; const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450; return { perSitting, total: perSitting * sittings }; };
-  const handleGenerateAnother = async () => {
-    setError(""); setIsLoading(true);
-    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); setRecipe(await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] })); } else { setRecipe(await callAPI(recipe?.title)); } } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+
+  const handleFindMeal = async () => {
+    if (!ingPicker.length) return;
+    // GUEST LIMIT: 2 free recipes
+    if (isGuest && guestCount >= 2) {
+      setError("You've used your 2 free recipes. Login / Register to keep cooking — it's free.");
+      onRequireAuth?.();
+      return;
+    }
+    setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true);
+    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
+
+  const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => { const MAP = { weightloss: { light: 350, heavy: 500 }, normal: { light: 450, heavy: 650 }, fit: { light: 450, heavy: 650 }, weightgain: { light: 550, heavy: 800 } }; const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450; return { perSitting, total: perSitting * sittings }; };
+
+  const handleGenerateAnother = async () => {
+    if (isGuest && guestCount >= 2) { onRequireAuth?.(); return; }
+    setError(""); setIsLoading(true);
+    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); setRecipe(await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] })); } else { setRecipe(await callAPI(recipe?.title)); } bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+  };
+
   const handleSurprise = async () => {
+    if (needAuth()) return; // Lazy Mode = locked
     setShowLazy(false); setRecipe(null); setError(""); setIsLoading(true);
     try { const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto"; const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad"; const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood); const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }; setLastSurprise(surprisePayload); setGoal(lazyGoal); const r = await callAPI(null, surprisePayload); setRecipe(r); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
+
   const handleAddRecipeToKcal = () => {
+    if (needAuth()) return;
     if (!recipe) return; const today = new Date().toISOString().slice(0, 10); const key = user?.email ? `didi_kcal_${user.email}_${today}` : `didi_kcal_guest_${today}`; const kcalNum = parseInt(String(recipe.caloriesPerSitting || recipe.calories || "0").replace(/[^0-9]/g, "")) || 0; const existing = JSON.parse(localStorage.getItem(key) || "[]"); localStorage.setItem(key, JSON.stringify([...existing, { id: Date.now(), name: recipe.title, qty: 1, unit: "serving", kcal: kcalNum, totalKcal: kcalNum }])); window.dispatchEvent(new Event("didi-kcal-updated")); alert(`Added ${recipe.title} • ${kcalNum} kcal to today's calculator 🔥`);
   };
+
+  const addPantryItem = () => {
+    if (needAuth()) return;
+    if (!pantryInput.trim()) return;
+    const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput("");
+  };
+
   return (
     <div className={`w-full bg-gradient-to-b ${theme.page} rounded-[32px] mx-auto max-w-[1400px] relative overflow-hidden`}>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[250px] bg-white/20 blur-[100px] rounded-full pointer-events-none" />
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-2 text-center">
         <h1 className="font-display text-[34px] md:text-[48px] leading-[1.05] text-white">{t(lang, 'kitchen1')}<br /><span className="italic font-light text-white/95">{t(lang, 'kitchen2')}</span></h1>
         <p className="text-[14px] text-white/80 mt-3 max-w-[620px] mx-auto">Add what you have — Rice, Chicken, Yam, Beans — and Didi makes a real recipe.</p>
+        {isGuest && (
+          <button onClick={() => onRequireAuth?.()} className="mt-4 inline-flex items-center gap-2 bg-white text-[#4A2C8A] text-[12px] font-bold px-4 py-2 rounded-full shadow-md">
+            <Lock size={13} /> Guest Mode • {Math.max(0, 2 - guestCount)} free recipes left — Login to unlock all
+          </button>
+        )}
         <div className="flex justify-center gap-2 mt-5 flex-wrap">
           <span className={`text-[12px] font-semibold bg-white ${theme.accent} shadow-md rounded-full px-3.5 py-1.5 flex items-center gap-1.5`}><CookingPot size={12} /> 120+ Recipes</span>
           <span className="text-[12px] font-semibold bg-white/15 border border-white/30 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5"><Clock size={12} /> Real Times</span>
@@ -77,7 +127,16 @@ useEffect(() => {
         </div>
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-5"><SettingsBar goal={goal} setGoal={setGoal} sittings={sittings} setSittings={setSittings} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} user={user} customCalories={customCalories} setCustomCalories={setCustomCalories} /></div>
-      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4"><CalorieCalculator user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} /></div>
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
+        {isGuest ? (
+          <div className="bg-white rounded-[24px] p-4 shadow-xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2"><Lock size={16} className={theme.accent} /><p className="text-[13px] font-bold">Kcal Calculator, Weight & Water are locked</p></div>
+            <button onClick={() => onRequireAuth?.()} className={`shrink-0 h-9 px-4 rounded-full bg-gradient-to-r ${theme.btn} text-white text-[12px] font-bold`}>Login to Unlock →</button>
+          </div>
+        ) : (
+          <CalorieCalculator user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} />
+        )}
+      </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
         <div className={`bg-white rounded-[28px] p-5 md:p-6 shadow-xl ${theme.shadow} h-full flex flex-col`}>
           <div className="flex items-center gap-2.5 mb-5"><span className={`w-9 h-9 rounded-full bg-gradient-to-br ${theme.btn} text-white flex items-center justify-center shadow-md`}>1</span><h2 className="font-display font-light text-[21px]">{t(lang, 'add')}</h2><span className={`ml-auto text-[10px] font-bold bg-gradient-to-r ${theme.btn} text-white px-2 py-1 rounded-full`}>FRESH</span></div>
@@ -85,12 +144,12 @@ useEffect(() => {
           <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-3">Quick add</p>
           <div className="flex flex-wrap gap-2">{['Rice', 'Chicken', 'Eggs', 'Tomato', 'Onion', 'Garlic', 'Pasta', 'Cheese', 'Beans', 'Plantain', 'Yam', 'Pepper', 'Potato', 'Beef', 'Oil', 'Salt', 'Fettuccine', 'Heavy Cream', 'Parmesan', 'Butter'].map(item => (<button key={item} onClick={() => handleAdd(item)} className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition ${theme.soft} ${theme.hover} hover:text-white`}>+ {item}</button>))}</div>
           <div className="mt-4">
-            <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-2">My Pantry — always at home</p>
+            <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-2">My Pantry — always at home {isGuest && "🔒"}</p>
             <div className="flex flex-wrap gap-1.5">{pantry.map(p => (<button key={p} onClick={() => handleAdd(p)} className="text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">+ {p}</button>))}</div>
-            <div className="flex gap-1.5 mt-2"><input value={pantryInput} onChange={e => setPantryInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && pantryInput.trim()) { const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput(""); } }} placeholder="Add to pantry e.g. Maggi" className="flex-1 h-9 px-3 bg-stone-50 border rounded-full text-[12px] outline-none" /><button onClick={() => { if (!pantryInput.trim()) return; const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput(""); }} className="h-9 px-3 bg-green-600 text-white rounded-full text-[12px] font-bold">Add</button></div>
+            <div className="flex gap-1.5 mt-2"><input value={pantryInput} onChange={e => setPantryInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addPantryItem(); }} placeholder={isGuest ? "Login to add to pantry 🔒" : "Add to pantry e.g. Maggi"} className="flex-1 h-9 px-3 bg-stone-50 border rounded-full text-[12px] outline-none" /><button onClick={addPantryItem} className="h-9 px-3 bg-green-600 text-white rounded-full text-[12px] font-bold">Add</button></div>
           </div>
-          <button onClick={() => { setLazyGoal(goal); setShowLazy(true); }} className={`w-full mt-5 h-12 rounded-full bg-gradient-to-r ${theme.btn} text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition`}><MoonStar size={16} /> Cook For Me <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full flex items-center gap-1"><Sparkles size={11} /> Lazy Mode</span></button>
-          <p className="text-[11px] text-center text-stone-400 mt-2">Too lazy to think? Didi picks for you.</p>
+          <button onClick={() => { if (needAuth()) return; setLazyGoal(goal); setShowLazy(true); }} className={`w-full mt-5 h-12 rounded-full bg-gradient-to-r ${theme.btn} text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition`}><MoonStar size={16} /> Cook For Me {isGuest && <Lock size={13} />} <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full flex items-center gap-1"><Sparkles size={11} /> Lazy Mode</span></button>
+          <p className="text-[11px] text-center text-stone-400 mt-2">{isGuest ? "Login to unlock Cook For Me" : "Too lazy to think? Didi picks for you."}</p>
           <div className="flex-1" />
           <div className={`bg-gradient-to-r ${theme.btn} rounded-2xl p-3 flex gap-2`}><span>💡</span><p className="text-[12px] text-white/90">Tip: Add <b>3-5 ingredients</b> • {CUISINES[cuisine]?.emoji} {CUISINES[cuisine]?.label} • {LOCATIONS[location]?.emoji} {LOCATIONS[location]?.label} • {cal.perSitting} kcal / sitting</p></div>
         </div>
@@ -105,7 +164,8 @@ useEffect(() => {
           <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-2 mt-4">{t(lang, 'location')}</p>
           <div className={`grid grid-cols-2 gap-2 p-1.5 ${theme.softBg} border ${theme.softBorder} rounded-full mb-2`}>{Object.values(LOCATIONS).map(l => (<button key={l.id} onClick={() => setLocation(l.id)} className={`h-10 rounded-full text-[12px] font-bold transition ${location === l.id ? `bg-gradient-to-r ${theme.btn} text-white shadow-md` : 'text-stone-500'}`}>{l.emoji} {l.label}</button>))}</div>
           <p className="text-[12px] text-center text-stone-400 mb-4">{LOCATIONS[location]?.desc} • 🔥 {cal.perSitting} kcal × {sittings} = {cal.total} kcal {cal.isCustom ? '(Custom)' : ''}</p>
-          <button onClick={handleFindMeal} disabled={isLoading || !ingPicker.length} className={`w-full h-14 rounded-full font-medium text-[16px] flex items-center justify-center gap-2 transition ${!ingPicker.length || isLoading ? 'bg-stone-100 text-stone-400' : `bg-gradient-to-r ${theme.btn} text-white shadow-lg active:scale-[0.98]`}`}>{isLoading ? 'Finding your meal...' : <><Search size={18} /> {t(lang, 'find')} {GOALS[goal]?.emoji}</>}</button>
+          <button onClick={handleFindMeal} disabled={isLoading || !ingPicker.length} className={`w-full h-14 rounded-full font-medium text-[16px] flex items-center justify-center gap-2 transition ${!ingPicker.length || isLoading ? 'bg-stone-100 text-stone-400' : `bg-gradient-to-r ${theme.btn} text-white shadow-lg active:scale-[0.98]`}`}>{isLoading ? 'Finding your meal...' : <><Search size={18} /> {isGuest && guestCount >= 2 ? "Login to Continue 🔒" : `${t(lang, 'find')} ${GOALS[goal]?.emoji}`} </>}</button>
+          {isGuest && <p className="text-[11px] text-center text-stone-400 mt-2">{Math.max(0, 2 - guestCount)} free recipes left. After that, login is free.</p>}
           <div className="flex justify-between mt-auto pt-4"><button onClick={() => setIngPicker([])} className={`text-[12px] font-semibold text-stone-400 ${theme.accent} flex gap-1 items-center`}><Delete size={14} /> Clear all</button><p className="text-[12px] font-semibold">{ingPicker.length === 0 ? 'Your basket is empty' : `${GOALS[goal]?.label} • ${cal.perSitting} kcal/sitting`}</p></div>
         </div>
         <div className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1">
@@ -117,23 +177,23 @@ useEffect(() => {
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-6">
         <div className="bg-white rounded-[24px] p-4 shadow-xl flex flex-wrap gap-2">
-          <button onClick={() => { setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showFav ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}><Heart size={14} /> Favourites ({favList.length})</button>
-          <button onClick={() => { setShowHist(!showHist); setShowFav(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showHist ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}><History size={14} /> History ({histList.length})</button>
-          <button onClick={() => { setShowShop(!showShop); setShowFav(false); setShowHist(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showShop ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}><ShoppingCart size={14} /> Shopping ({shopList.filter(i => !i.done).length} left)</button>
-          {shopList.length > 0 && <button onClick={() => setShopList(clearShopping(user, true))} className="h-10 px-3 rounded-full text-[12px] font-bold text-red-500">Clear ticked</button>}
+          <button onClick={() => { if (needAuth()) return; setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showFav ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <Heart size={14} />} Favourites {isGuest ? "🔒" : `(${favList.length})`}</button>
+          <button onClick={() => { if (needAuth()) return; setShowHist(!showHist); setShowFav(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showHist ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <History size={14} />} History {isGuest ? "🔒" : `(${histList.length})`}</button>
+          <button onClick={() => { if (needAuth()) return; setShowShop(!showShop); setShowFav(false); setShowHist(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showShop ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <ShoppingCart size={14} />} Shopping {isGuest ? "🔒" : `(${shopList.filter(i => !i.done).length} left)`}</button>
+          {!isGuest && shopList.length > 0 && <button onClick={() => setShopList(clearShopping(user, true))} className="h-10 px-3 rounded-full text-[12px] font-bold text-red-500">Clear ticked</button>}
         </div>
-        {(showFav || showHist) && (
+        {(showFav || showHist) && !isGuest && (
           <div className="bg-white rounded-[24px] p-4 shadow-xl mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {(showFav ? favList : histList).length === 0 ? <p className="text-[12px] text-stone-400 col-span-2 text-center py-3">Nothing here yet. Generate a recipe and ❤️ it.</p> : (showFav ? favList : histList).map(r => (<button key={r.title + (r.savedAt || r.viewedAt || "")} onClick={() => setRecipe(r)} className="text-left border rounded-2xl p-3 flex justify-between items-center"><span><span className="block text-[13px] font-bold">{r.title}</span><span className="block text-[11px] text-stone-400">{r.time} • {r.caloriesPerSitting || r.calories}</span></span><span className="text-[12px]">→</span></button>))}
           </div>
         )}
-        {showShop && (
+        {showShop && !isGuest && (
           <div className="bg-white rounded-[24px] p-4 shadow-xl mt-2">
             {shopList.length === 0 ? <p className="text-[12px] text-stone-400 text-center py-3">Shopping list empty. Open a recipe → Shopping List.</p> : shopList.map(i => (<button key={i.id} onClick={() => setShopList(toggleShopping(user, i.id))} className="w-full flex items-center gap-2 py-2 border-b last:border-0 text-left"><span className={`w-5 h-5 rounded-full border flex items-center justify-center ${i.done ? "bg-green-500 text-white border-green-500" : ""}`}>{i.done && <Check size={12} />}</span><span className={`text-[13px] ${i.done ? "line-through text-stone-400" : "font-semibold"}`}>{i.name}</span></button>))}
           </div>
         )}
       </div>
-      {showLazy && (
+      {showLazy && !isGuest && (
         <div className="fixed inset-0 z-[100] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setShowLazy(false)}>
           <div className="bg-white rounded-[28px] p-6 w-full max-w-[440px] shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-start"><div><h3 className="font-display text-[22px] leading-none flex items-center gap-2"><MoonStar size={20} className={theme.accent} /> Cook For Me</h3><p className="text-[12px] text-stone-400 mt-1">Didi picks a random meal. You just cook.</p></div><button onClick={() => setShowLazy(false)} className="w-8 h-8 bg-stone-100 rounded-full font-bold"><X size={16} className="mx-auto" /></button></div>
