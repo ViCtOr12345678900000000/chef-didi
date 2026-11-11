@@ -134,7 +134,8 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
-  // SECRET PAGE - Still hidden, only with #advertise link
+  // SECRET PAGE - Only opens with #advertise link. No link on homepage.
+  // Test link: https://chef-didi-9vo3.vercel.app/#advertise
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') {
     return <Advertise />;
   }
@@ -163,17 +164,6 @@ export default function App() {
         <p className="text-stone-500 text-[15px] mt-3 font-light">
           Enter what you have. Get a recipe.
         </p>
-
-        {/* ===== BILLBOARD ON - ₦50K BRAND - START ===== */}
-        {/* Change the name, link and logo below to the real brand that paid */}
-        <a href="https://goldenpenny.com" target="_blank" rel="noreferrer" className="block max-w-[600px] mx-auto mt-5 bg-[#ffeaa7] border border-[#f0c27a] rounded-2xl p-4 flex items-center justify-center gap-3 shadow-sm">
-          <img src="https://via.placeholder.com/40x40.png?text=LOGO" alt="Brand Logo" className="w-10 h-10 rounded-full bg-white object-cover" />
-          <span className="text-left">
-            <span className="block text-[11px] text-stone-500">This recipe is powered by</span>
-            <span className="block text-[16px] font-bold text-[#1A1A2E]">Golden Penny — Shop Now →</span>
-          </span>
-        </a>
-        {/* ===== BILLBOARD ON - END ===== */}
 
         <div className="flex justify-center items-center gap-2 mt-4 flex-wrap">
           {user ? (
