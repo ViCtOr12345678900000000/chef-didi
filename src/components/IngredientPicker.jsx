@@ -39,6 +39,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     return false;
   };
 
+  // ---------- AUTO-SYNC TO CLOUD (debounced) - NOW INCLUDES marketPrices ----------
   const syncCloud = () => {
     if (!user?.email) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
@@ -65,7 +66,10 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
           pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
           weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
-          kcal, water, createdAt: new Date().toISOString(), migrated: true,
+          kcal, water,
+          // NEW: Cost Estimator prices - saved to DB
+          marketPrices: JSON.parse(localStorage.getItem("didi_market_prices") || "{}"),
+          createdAt: new Date().toISOString(), migrated: true,
         };
         await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, data: bundle }) });
       } catch {}
@@ -105,12 +109,14 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     sync();
     const onRestored = () => { sync(); setCloudVersion((v) => v + 1); };
     const onKcal = () => { setCloudVersion((v) => v + 1); syncCloud(); };
+    const onMarket = () => { syncCloud(); };
     window.addEventListener("didi-fav-updated", sync);
     window.addEventListener("didi-history-updated", sync);
     window.addEventListener("didi-shopping-updated", sync);
     window.addEventListener("didi-pantry-updated", sync);
     window.addEventListener("didi-data-restored", onRestored);
     window.addEventListener("didi-kcal-updated", onKcal);
+    window.addEventListener("didi-market-updated", onMarket);
     return () => {
       window.removeEventListener("didi-fav-updated", sync);
       window.removeEventListener("didi-history-updated", sync);
@@ -118,6 +124,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       window.removeEventListener("didi-pantry-updated", sync);
       window.removeEventListener("didi-data-restored", onRestored);
       window.removeEventListener("didi-kcal-updated", onKcal);
+      window.removeEventListener("didi-market-updated", onMarket);
     };
   }, [user?.email]);
 
@@ -233,7 +240,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
         </div>
         <div className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1">
           {isLoading && <div className="bg-white rounded-[28px] p-6 shadow-xl animate-pulse"><p className="text-center text-[12px] font-bold text-stone-400">👩🏾‍🍳 Cooking up your recipe...</p></div>}
-          {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={() => { setRecipe(null); setIngPicker([]); setLastSurprise(null); }} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} />}
+          {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={() => { setRecipe(null); setIngPicker([]); setLastSurprise(null); }} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} location={location} />}
           {error && !isLoading && <div className="bg-white rounded-[24px] p-5 text-center text-[13px] text-red-600 font-semibold">{error}</div>}
           {!recipe && !isLoading && (<div className="bg-white rounded-[28px] p-6 shadow-xl"><div className={`${theme.softBg} border border-dashed ${theme.softBorder} rounded-2xl py-8 text-center`}><p className="text-[28px]">🍲</p><p className="text-[14px] font-semibold text-stone-600">Your recipe will appear here.</p><p className="text-[12px] text-stone-400">Pick ingredients → Choose goal → Find Meal</p></div></div>)}
         </div>
