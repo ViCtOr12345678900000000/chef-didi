@@ -24,7 +24,7 @@ export default async function handler(req, res) {
             const median = sorted[Math.floor(sorted.length / 2)];
             const filtered = arr.filter(p => p > median * 0.4 && p < median * 2.5);
             const avg = Math.round(filtered.reduce((s,v) => s+v, 0) / filtered.length);
-            prices[item] = avg;
+            prices[item] = avg; 
             counts[item] = filtered.length;
           }
         }
