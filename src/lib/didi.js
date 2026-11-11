@@ -142,8 +142,6 @@ export function getSwaps(ing) {
 }
 
 // ---------- MARKET PRICES (Community + Local Fallback) ----------
-// DEFAULT = fallback when no one has reported a price yet for that area.
-// Once users report via /api/market-prices, CostEstimator overwrites these with community averages.
 export const DEFAULT_MARKET_PRICES = {
   "rice": 2500, "chicken": 4500, "tomato": 1200, "pepper": 800,
   "onion": 900, "yam": 3000, "beans": 1800, "plantain": 1500,
@@ -169,7 +167,58 @@ export function saveMarketPrice(key, price) {
   return next;
 }
 
-// Helper: map your location picker ("nigeria" / "abroad") to market location ("lagos" / "abroad")
 export function marketLocationFor(location) {
   return location === "abroad" ? "abroad" : "lagos";
+}
+
+// ---------- QUESTS - NEW, THIS FIXES THE BUILD ERROR ----------
+export const QUESTS = [
+  { id: "jollof-week", title: "Jollof Week 🔥", desc: "Cook Jollof 2x this week with what you have", reward: "Jollof Master Badge", total: 2, match: (title) => String(title).toLowerCase().includes("jollof") },
+  { id: "zero-waste-3", title: "Zero Waste Hero ♻️", desc: "Cook 3 meals using leftovers / pantry only", reward: "Zero Waste Badge", total: 3, match: () => true },
+  { id: "no-spend-sunday", title: "No-Spend Sunday", desc: "Cook a full meal with ONLY pantry items", reward: "Pantry Pro Badge", total: 1, match: () => true },
+  { id: "soup-sunday", title: "Soup Sunday 🍲", desc: "Cook any soup / stew this Sunday", reward: "Soup Star Badge", total: 1, match: (title) => /soup|stew|egusi|ogbono|pepper soup|ewedu|okro/i.test(String(title)) },
+];
+
+export function getQuests(user) {
+  try {
+    const email = typeof user === "string" ? user : user?.email;
+    const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch { return []; }
+}
+
+export function joinQuest(user, questId) {
+  const email = typeof user === "string" ? user : user?.email;
+  const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
+  const list = getQuests(user);
+  if (list.find(q => q.id === questId)) return list;
+  const quest = QUESTS.find(q => q.id === questId);
+  if (!quest) return list;
+  const next = [...list, { id: questId, progress: 0, total: quest.total, completed: false, joinedAt: Date.now() }];
+  localStorage.setItem(key, JSON.stringify(next));
+  window.dispatchEvent(new Event("didi-quests-updated"));
+  return next;
+}
+
+export function progressQuests(user, recipeTitle) {
+  const list = getQuests(user);
+  if (!list.length) return { list, newlyCompleted: [] };
+  const email = typeof user === "string" ? user : user?.email;
+  const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
+  const newlyCompleted = [];
+  const next = list.map(q => {
+    if (q.completed) return q;
+    const quest = QUESTS.find(x => x.id === q.id);
+    if (!quest) return q;
+    if (!quest.match(recipeTitle)) return q;
+    const progress = q.progress + 1;
+    const completed = progress >= q.total;
+    if (completed) newlyCompleted.push(q.id);
+    return { ...q, progress, completed, completedAt: completed ? Date.now() : q.completedAt };
+  });
+  if (newlyCompleted.length) {
+    localStorage.setItem(key, JSON.stringify(next));
+    window.dispatchEvent(new Event("didi-quests-updated"));
+  }
+  return { list: next, newlyCompleted };
 }
