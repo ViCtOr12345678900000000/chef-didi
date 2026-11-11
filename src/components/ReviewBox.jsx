@@ -8,9 +8,19 @@ export default function ReviewBox({ user }) {
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState("");
 
+  import { useState, useEffect } from "react";
+
+export default function ReviewBox({ user }) {
+  const [reviews, setReviews] = useState([]);
+  const [name, setName] = useState(user?.name || "");
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState("");
+
   const load = async () => {
     try {
-      const r = await fetch(`/api/community?type=reviews`);
+      const r = await fetch(`/api/my-number`);
       const j = await r.json();
       if (j.reviews) setReviews(j.reviews.slice(0, 5));
     } catch {}
@@ -24,10 +34,17 @@ export default function ReviewBox({ user }) {
     if (!name.trim()) { setMsg("Enter your name"); return; }
     setSending(true); setMsg("");
     try {
-      const res = await fetch("/api/community?type=reviews", {
+      const res = await fetch("/api/my-number", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), rating, comment: comment.trim(), email: user?.email || "guest", createdAt: new Date().toISOString() }),
+        body: JSON.stringify({
+          type: "reviews",
+          name: name.trim(),
+          rating,
+          comment: comment.trim(),
+          email: user?.email || "guest",
+          createdAt: new Date().toISOString()
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Failed");
