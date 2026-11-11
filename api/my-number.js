@@ -1,4 +1,4 @@
-// api/my-number.js - INTEGRATED: dashboard + reviews (no extra function)
+// api/my-number.js - INTEGRATED: dashboard + reviews + delete for visitors/users/reviews
 import { Redis } from "@upstash/redis";
 
 const redis = Redis.fromEnv();
@@ -6,7 +6,11 @@ const redis = Redis.fromEnv();
 function parseMaybeJSON(v) {
   if (v == null) return null;
   if (typeof v !== "string") return v;
-  try { return JSON.parse(v); } catch { return v; }
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
 }
 
 function toArray(raw) {
@@ -31,7 +35,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Name + comment required" });
       }
       const review = {
-        id: Date.now().toString(),
+        id: `rev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name: name.trim().slice(0, 50),
         email: (email || "").trim().slice(0, 100),
         rating: Math.min(5, Math.max(1, Number(rating) || 5)),
@@ -42,20 +46,81 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, review });
     }
 
-    // --- REVIEWS: DELETE - from MyNumber dashboard ---
+    // --- UNIVERSAL DELETE: remove visitor, user, or review ---
     if (req.method === "DELETE") {
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: "Missing id" });
-      const all = await redis.lrange("didi:reviews", 0, -1);
-      const kept = all.filter((s) => {
-        try { return parseMaybeJSON(s)?.id !== String(id); } catch { return true; }
+      const body = req.body || {};
+      const type = body.type || req.query.type || "reviews";
+      const id = body.id || req.query.id;
+      const { email, createdAt, comment, city, name } = body;
+
+      // Determine Redis key dynamically based on target type
+      let redisKey = "didi:reviews";
+      if (type === "visitors") {
+        // Check which list key exists for visitors
+        const list1 = await redis.lrange("didi:visitors_list", 0, 0).catch(() => []);
+        redisKey = list1.length ? "didi:visitors_list" : "didi:visits";
+      } else if (type === "users") {
+        redisKey = "didi:users_list";
+      }
+
+      const allRaw = await redis.lrange(redisKey, 0, -1);
+      if (!allRaw || !allRaw.length) {
+        return res.status(404).json({ error: "No records found to delete" });
+      }
+
+      let removed = false;
+      const kept = allRaw.filter((itemStr) => {
+        if (removed) return true; // match only one entry per delete click
+        const item = parseMaybeJSON(itemStr);
+        if (!item) return true;
+
+        // 1. Primary match by explicit ID
+        if (id && String(item.id) === String(id)) {
+          removed = true;
+          return false;
+        }
+
+        // 2. Fallback composite key matching if no ID exists
+        if (type === "reviews") {
+          const matchComment = item.comment === comment;
+          const matchTimeOrEmail = item.createdAt === createdAt || item.email === email;
+          if (matchComment && matchTimeOrEmail) {
+            removed = true;
+            return false;
+          }
+        } else if (type === "users") {
+          const matchEmail = email && item.email === email;
+          const matchName = name && item.name === name;
+          if (matchEmail || (matchName && item.createdAt === createdAt)) {
+            removed = true;
+            return false;
+          }
+        } else if (type === "visitors") {
+          const matchTime = createdAt && (item.time === createdAt || item.createdAt === createdAt);
+          const matchCity = city && item.city === city;
+          if (matchTime && matchCity) {
+            removed = true;
+            return false;
+          }
+        }
+
+        return true;
       });
-      await redis.del("didi:reviews");
-      if (kept.length) await redis.rpush("didi:reviews", ...kept);
-      return res.status(200).json({ ok: true });
+
+      if (!removed) {
+        return res.status(404).json({ error: "Item match not found in Upstash" });
+      }
+
+      // Atomically overwrite Upstash list key with remaining filtered items
+      await redis.del(redisKey);
+      if (kept.length) {
+        await redis.rpush(redisKey, ...kept);
+      }
+
+      return res.status(200).json({ ok: true, deletedType: type });
     }
 
-    // --- DASHBOARD: GET - your original code, untouched ---
+    // --- DASHBOARD: GET ---
     // 1. VISITORS - try list first, then old counter format
     let visitors = [];
     try {
@@ -105,6 +170,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("my-number error", err);
-    return res.status(500).json({ error: "Failed to load stats" });
+    return res.status(500).json({ error: "Failed to process request" });
   }
 }
