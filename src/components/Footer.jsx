@@ -22,7 +22,7 @@ export default function Footer({ lang = "en", themeId = "purple", onPickPopular,
   const theme = THEMES[themeId] || THEMES.purple;
   const tip = TIPS[new Date().getDate() % TIPS.length];
 
-  // --- REVIEW BOX STATE ---
+  // --- REVIEW BOX STATE - Upstash only, no localStorage ---
   const [name, setName] = useState(user?.name || "");
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -98,7 +98,7 @@ export default function Footer({ lang = "en", themeId = "purple", onPickPopular,
         </div>
       </div>
 
-      {/* 4 - REVIEW BOX - NEW - sends to Upstash -> shows in MyNumber */}
+      {/* 4 - REVIEW BOX - Upstash -> shows in MyNumber */}
       <div className="bg-white rounded-[28px] p-6 shadow-xl shadow-violet-900/10 mt-4">
         <p className="text-[28px] mb-1">⭐</p>
         <h3 className="font-display text-[20px] font-medium text-[#1A1A2E]">Love Chef Didi? Leave a Review</h3>
@@ -118,13 +118,16 @@ export default function Footer({ lang = "en", themeId = "purple", onPickPopular,
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Your name"
+          autoComplete="off"
+          maxLength={50}
           className="w-full h-11 px-4 bg-stone-50 border rounded-full text-[13px] outline-none mt-3"
         />
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Tell Didi what you cooked... e.g. Jollof came out perfect!"
+          placeholder="Leave a review or modification you'd like to see in later versions"
           rows={3}
+          maxLength={500}
           className="w-full px-4 py-3 bg-stone-50 border rounded-2xl text-[13px] outline-none mt-2 resize-none"
         />
         <button
