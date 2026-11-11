@@ -257,3 +257,33 @@ export async function reportMarketPriceToUpstash({ item, price, location, email 
     body: JSON.stringify({ location: location === "abroad" ? "abroad" : "lagos", item, price, email: email || "guest" }),
   });
 }
+// ---------- REVIEWS - Upstash via /api/reviews ----------
+export async function saveReview({ name, email, rating, comment }) {
+  const res = await fetch("/api/reviews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email: email || "guest", rating, comment }),
+  });
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error || "Failed to send review");
+  return j.review;
+}
+
+export async function getReviews() {
+  try {
+    const res = await fetch("/api/reviews");
+    const j = await res.json();
+    return j.reviews || [];
+  } catch { return []; }
+}
+
+export async function deleteReview(id) {
+  const res = await fetch("/api/reviews", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error || "Failed to delete");
+  return true;
+}
