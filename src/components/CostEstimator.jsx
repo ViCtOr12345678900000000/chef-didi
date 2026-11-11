@@ -7,12 +7,13 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [reportItem, setReportItem] = useState("");
+  const [customItem, setCustomItem] = useState("");
   const [reportPrice, setReportPrice] = useState("");
   const [reportMsg, setReportMsg] = useState("");
   const [reportSending, setReportSending] = useState(false);
 
   const marketLoc = marketLocationFor(location);
-  // REMOVED: getMarketPrices() localStorage fallback - Upstash only now
+  // Upstash only - NO localStorage, NO pattern=""
 
   const ingredients = recipe?.ingredients || [];
   const parsed = ingredients.map((raw) => {
@@ -49,11 +50,13 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
   }, [marketLoc]);
 
   const handleReport = async () => {
-    if (!reportItem.trim() || !reportPrice) {
+    // Use custom name if "Other" is selected
+    const finalItem = (reportItem === "__other__" ? customItem : reportItem).trim();
+    if (!finalItem || !reportPrice) {
       setReportMsg("Pick an ingredient + enter price");
       return;
     }
-    // FIX: strip non-digits here, no pattern="" needed - this was the Safari error
+    // No pattern="" - strip non-digits in JS, this was the Safari fix
     const p = parseInt(String(reportPrice).replace(/[^0-9]/g, ""), 10);
     if (!p || p < 10) {
       setReportMsg("Enter a real price e.g. 2500");
@@ -67,21 +70,21 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           location: marketLoc,
-          item: reportItem.trim(),
+          item: finalItem,
           price: p,
           email: user?.email || "guest",
         }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Failed");
-      // UPSTASH ONLY: no saveMarketPrice() localStorage call anymore
-      // Update UI from Upstash response directly
+      // Update UI from Upstash response directly - no localStorage
       setCommunity((prev) => ({
-        prices: { ...prev.prices, [reportItem.trim().toLowerCase()]: j.average || p },
-        counts: { ...prev.counts, [reportItem.trim().toLowerCase()]: (prev.counts[reportItem.trim().toLowerCase()] || 0) + 1 },
+        prices: { ...prev.prices, [finalItem.toLowerCase()]: j.average || p },
+        counts: { ...prev.counts, [finalItem.toLowerCase()]: (prev.counts[finalItem.toLowerCase()] || 0) + 1 },
       }));
-      setReportMsg(`✅ Thanks! New average for ${reportItem}: ₦${(j.average || p).toLocaleString()}`);
+      setReportMsg(`✅ Thanks! New average for ${finalItem}: ₦${(j.average || p).toLocaleString()}`);
       setReportPrice("");
+      setCustomItem("");
       setTimeout(() => setShowReport(false), 2000);
     } catch (e) {
       setReportMsg("❌ " + e.message);
@@ -147,17 +150,17 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
       ) : (
         <div className="mt-3 bg-stone-50 rounded-2xl p-3">
           <p className="text-[12px] font-bold mb-2">What did you pay in {marketLoc === "lagos" ? "Lagos" : "Abroad"}?</p>
-          <select value={reportItem} onChange={(e) => setReportItem(e.target.value)} className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2">
+          <select value={reportItem} onChange={(e) => { setReportItem(e.target.value); setReportMsg(""); }} className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2">
             {parsed.map((r, i) => (
               <option key={i} value={r.name}>{r.name}</option>
             ))}
-            <option value="">Other ingredient...</option>
+            <option value="__other__">Other ingredient...</option>
           </select>
-          {!parsed.find((r) => r.name === reportItem) && (
-            <input type="text" value={reportItem} onChange={(e) => setReportItem(e.target.value)} placeholder="Type ingredient e.g. Rice" className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2" />
+          {reportItem === "__other__" && (
+            <input type="text" value={customItem} onChange={(e) => setCustomItem(e.target.value)} placeholder="Type ingredient e.g. Rice" autoComplete="off" className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2" />
           )}
           <div className="flex gap-2">
-            {/* FIX: type="text" + inputMode numeric, NO pattern="" - pattern was causing Safari "string did not match" */}
+            {/* NO pattern="" - type="text" + inputMode numeric only */}
             <input type="text" inputMode="numeric" autoComplete="off" value={reportPrice} onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Price e.g. 2500" className="flex-1 min-w-0 h-10 px-3 bg-white border rounded-full text-[12px] outline-none" />
             <button type="button" onClick={handleReport} disabled={reportSending} className="h-10 px-4 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50 shrink-0">
               {reportSending ? "Sending..." : "Send"}
