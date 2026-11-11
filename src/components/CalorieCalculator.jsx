@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Flame, Droplets, Scale, Camera, ImagePlus, Trash2, Sparkles, Eye, Plus, X, Calculator } from "lucide-react";
-import { GOALS, THEMES, caloriesFor, getStreak, getWeeklyKcal, getWater, setWater, getWeights, addWeight, dateStr } from "../lib/didi";
+import { GOALS, THEMES, caloriesFor, getStreak, getWeeklyKcal, getWater, setWater, getWeights, addWeight, dateStr, getPrefs } from "../lib/didi";
 export default function CalorieCalculator({ user, goal, themeId, lang, customCalories }) {
   const theme = THEMES[themeId] || THEMES.purple;
   const today = new Date().toISOString().slice(0, 10);
@@ -19,28 +19,106 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const [weights, setWeights] = useState(() => getWeights(user));
   const [weightInput, setWeightInput] = useState("");
   const [showWeek, setShowWeek] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
   const videoRef = useRef(null); const canvasRef = useRef(null); const streamRef = useRef(null); const fileRef = useRef(null);
+  const syncTimer = useRef(null);
+  const isFirstEatenSave = useRef(true);
   const cal = caloriesFor(goal, 3, customCalories);
   const target = cal.total;
   const totalEaten = eaten.reduce((s, x) => s + (x.totalKcal || 0), 0);
   const left = target - totalEaten;
   const pct = Math.min(100, Math.round((totalEaten / target) * 100));
   const over = totalEaten > target;
+  // Re-compute on refreshTick so streak/week update after cloud restore
   const streak = getStreak(user);
   const weekly = getWeeklyKcal(user);
   const maxWeek = Math.max(...weekly.map(w => w.total), target);
+
+  // ---------- AUTO-SYNC TO CLOUD ----------
+  const syncCloud = () => {
+    if (!user?.email) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        const email = user.email.toLowerCase().trim();
+        const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
+        const found = users.find((u) => u.email === email);
+        const kcal = {};
+        const waterMap = {};
+        for (let i = 0; i < 30; i++) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          const day = d.toISOString().slice(0, 10);
+          const v = localStorage.getItem(`didi_kcal_${email}_${day}`);
+          if (v) kcal[day] = JSON.parse(v);
+          const w = localStorage.getItem(`didi_water_${email}_${day}`);
+          if (w) waterMap[day] = JSON.parse(w);
+        }
+        const bundle = {
+          email, name: user.name || found?.name || "", password: found?.password || "",
+          prefs: getPrefs(email),
+          fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
+          history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
+          shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
+          pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
+          weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
+          kcal, water: waterMap, createdAt: new Date().toISOString(), migrated: true,
+        };
+        await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, data: bundle }) });
+      } catch {}
+    }, 800);
+  };
+
   // FIX: reload everything when user logs in / changes - this was the vanish bug
   useEffect(() => {
     try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch { setEaten([]); }
     setWaterState(getWater(user));
     setWeights(getWeights(user));
+    isFirstEatenSave.current = true;
   }, [user?.email, key]);
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(eaten)); }, [eaten, key]);
+
+  // Save eaten + sync, but skip the very first save after a reload (it would overwrite cloud data with stale state)
   useEffect(() => {
-    const reload = () => { try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch {} setWaterState(getWater(user)); setWeights(getWeights(user)); };
+    if (isFirstEatenSave.current) { isFirstEatenSave.current = false; return; }
+    localStorage.setItem(key, JSON.stringify(eaten));
+    syncCloud();
+  }, [eaten, key]);
+
+  useEffect(() => {
+    const reload = () => {
+      try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch {}
+      setWaterState(getWater(user));
+      setWeights(getWeights(user));
+      isFirstEatenSave.current = true;
+      setRefreshTick((t) => t + 1);
+    };
     window.addEventListener("didi-kcal-updated", reload);
-    return () => window.removeEventListener("didi-kcal-updated", reload);
+    window.addEventListener("didi-data-restored", reload);
+    return () => {
+      window.removeEventListener("didi-kcal-updated", reload);
+      window.removeEventListener("didi-data-restored", reload);
+    };
   }, [key, user?.email]);
+
+  const handleWaterAdd = () => {
+    const n = Math.min(12, water + 1);
+    setWaterState(n);
+    setWater(user, n);
+    syncCloud();
+  };
+
+  const handleLogWeight = () => {
+    if (!weightInput) return;
+    const next = addWeight(user, weightInput);
+    setWeights(next);
+    setWeightInput("");
+    syncCloud();
+  };
+
+  const handleClearToday = () => {
+    setEaten([]);
+    syncCloud();
+  };
+
   const handleCalc = async () => {
     if (!text.trim()) return; setErr(""); setIsCalc(true); setAiNote(""); setAiSee("");
     try {
@@ -82,12 +160,12 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
           </div>
           <div className="flex gap-2 mb-3">
             <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Flame size={20} className="mx-auto text-orange-500" /><p className="text-[14px] font-bold mt-1">{streak} day{streak === 1 ? "" : "s"}</p><p className="text-[10px] text-stone-400">Streak</p></div>
-            <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Droplets size={20} className="mx-auto text-blue-500" /><p className="text-[14px] font-bold mt-1">{water} / 8</p><button onClick={() => { const n = Math.min(12, water + 1); setWaterState(n); setWater(user, n); }} className="mt-1 w-7 h-7 bg-blue-500 text-white rounded-full flex items-center justify-center mx-auto"><Plus size={14} /></button></div>
+            <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Droplets size={20} className="mx-auto text-blue-500" /><p className="text-[14px] font-bold mt-1">{water} / 8</p><button onClick={handleWaterAdd} className="mt-1 w-7 h-7 bg-blue-500 text-white rounded-full flex items-center justify-center mx-auto"><Plus size={14} /></button></div>
             <div className={`${theme.softBg} rounded-2xl p-3 flex-1 text-center`}><Scale size={20} className="mx-auto text-stone-600" /><p className="text-[14px] font-bold mt-1">{weights[0]?.kg ? `${weights[0].kg} kg` : "—"}</p><p className="text-[10px] text-stone-400">Weight</p></div>
           </div>
           <div className="flex gap-2 mb-3">
             <input value={weightInput} onChange={e => setWeightInput(e.target.value)} placeholder="Log weight (kg)" type="number" className={`flex-1 h-10 px-3 ${theme.softBg} border ${theme.softBorder} rounded-full text-[12px] outline-none`} />
-            <button onClick={() => { if (!weightInput) return; const next = addWeight(user, weightInput); setWeights(next); setWeightInput(""); }} className="h-10 px-4 bg-white border rounded-full text-[12px] font-bold">Log Weight</button>
+            <button onClick={handleLogWeight} className="h-10 px-4 bg-white border rounded-full text-[12px] font-bold">Log Weight</button>
             <button onClick={() => setShowWeek(!showWeek)} className={`h-10 px-4 rounded-full text-[12px] font-bold ${showWeek ? "bg-[#1A1A2E] text-white" : "bg-white border"}`}>{showWeek ? "Hide Week" : "This Week"}</button>
           </div>
           {showWeek && (
@@ -107,7 +185,7 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
             <button onClick={startCamera} className="h-10 px-4 bg-[#1A1A2E] text-white rounded-full text-[12px] font-bold flex items-center gap-1.5"><Camera size={14} /> Snap your food</button>
             <button onClick={() => fileRef.current?.click()} className={`h-10 px-4 bg-white border ${theme.softBorder} rounded-full text-[12px] font-bold flex items-center gap-1.5`}><ImagePlus size={14} /> Upload Photo</button>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-            <button onClick={() => setEaten([])} className="h-10 px-4 bg-white border border-red-100 text-red-500 rounded-full text-[12px] font-bold flex items-center gap-1"><Trash2 size={13} /> Clear today</button>
+            <button onClick={handleClearToday} className="h-10 px-4 bg-white border border-red-100 text-red-500 rounded-full text-[12px] font-bold flex items-center gap-1"><Trash2 size={13} /> Clear today</button>
           </div>
           <div className="flex flex-wrap gap-1.5 mb-3">
             {['1 plate Jollof + Chicken', 'A full plate of Beans', '2 Boiled Eggs + Bread', '1 bottle Coke'].map(s => (<button key={s} onClick={() => setText(s)} className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border ${theme.soft}`}>{s}</button>))}
