@@ -5,17 +5,21 @@ export default async function handler(req, res) {
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const existingRes = await fetch(`${url}/lrange/users/0/-1`, { headers });
+  const existingData = await existingRes.json();
+  const existingEmails = new Set((existingData.result || []).map((item) => {
+    try { const p = typeof item === 'string' ? JSON.parse(item) : item; return p.email?.toLowerCase(); } catch { return null; }
+  }));
 
   for (const u of users) {
     if (!u?.email) continue;
     const email = u.email.toLowerCase().trim();
-    // Save each user individually, not as one giant array
-    await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify({ ...u, email }))}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    await fetch(`${url}/set/migrated:${encodeURIComponent(email)}/1`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    if (existingEmails.has(email)) continue;
+    await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify({ ...u, email }))}`, { headers });
+    await fetch(`${url}/set/migrated:${encodeURIComponent(email)}/1`, { headers });
+    existingEmails.add(email);
   }
   return res.status(200).json({ ok: true });
 }
