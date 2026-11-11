@@ -141,7 +141,9 @@ export function getSwaps(ing) {
   return key ? SWAPS[key] : ["Onion", "Garlic", "Any similar ingredient"];
 }
 
-// ---------- MARKET PRICES (Community + Local Fallback) ----------
+// ---------- MARKET PRICES ----------
+// Upstash is source of truth. These local helpers are kept ONLY so old imports don't crash.
+// CostEstimator.jsx NO LONGER calls getMarketPrices() / saveMarketPrice() - it fetches /api/community directly.
 export const DEFAULT_MARKET_PRICES = {
   "rice": 2500, "chicken": 4500, "tomato": 1200, "pepper": 800,
   "onion": 900, "yam": 3000, "beans": 1800, "plantain": 1500,
@@ -160,6 +162,7 @@ export function getMarketPrices() {
 }
 
 export function saveMarketPrice(key, price) {
+  // DEPRECATED: kept for backwards compat, CostEstimator now POSTs to /api/community (Upstash)
   const current = getMarketPrices();
   const next = { ...current, [String(key).toLowerCase()]: parseInt(price) };
   localStorage.setItem("didi_market_prices", JSON.stringify(next));
@@ -171,23 +174,29 @@ export function marketLocationFor(location) {
   return location === "abroad" ? "abroad" : "lagos";
 }
 
-// ---------- QUESTS - NEW, THIS FIXES THE BUILD ERROR ----------
+// ---------- QUESTS - Zero Waste Hero REMOVED ----------
 export const QUESTS = [
   { id: "jollof-week", title: "Jollof Week 🔥", desc: "Cook Jollof 2x this week with what you have", reward: "Jollof Master Badge", total: 2, match: (title) => String(title).toLowerCase().includes("jollof") },
-  { id: "zero-waste-3", title: "Zero Waste Hero ♻️", desc: "Cook 3 meals using leftovers / pantry only", reward: "Zero Waste Badge", total: 3, match: () => true },
+  // DELETED: { id: "zero-waste-3", title: "Zero Waste Hero ♻️", ... } - removed per request
   { id: "no-spend-sunday", title: "No-Spend Sunday", desc: "Cook a full meal with ONLY pantry items", reward: "Pantry Pro Badge", total: 1, match: () => true },
   { id: "soup-sunday", title: "Soup Sunday 🍲", desc: "Cook any soup / stew this Sunday", reward: "Soup Star Badge", total: 1, match: (title) => /soup|stew|egusi|ogbono|pepper soup|ewedu|okro/i.test(String(title)) },
 ];
+
+// Helper: filter out Zero Waste even if it was saved before deletion
+const isZeroWaste = (id) => id === "zero-waste-3" || id === "zero_waste" || id === "zero_waste_hero" || String(id).toLowerCase().includes("zero");
 
 export function getQuests(user) {
   try {
     const email = typeof user === "string" ? user : user?.email;
     const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
-    return JSON.parse(localStorage.getItem(key) || "[]");
+    const list = JSON.parse(localStorage.getItem(key) || "[]");
+    return list.filter(q => !isZeroWaste(q.id));
   } catch { return []; }
 }
 
 export function joinQuest(user, questId) {
+  // Block Zero Waste from being joined again
+  if (isZeroWaste(questId)) return getQuests(user);
   const email = typeof user === "string" ? user : user?.email;
   const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
   const list = getQuests(user);
@@ -201,7 +210,7 @@ export function joinQuest(user, questId) {
 }
 
 export function progressQuests(user, recipeTitle) {
-  const list = getQuests(user);
+  const list = getQuests(user).filter(q => !isZeroWaste(q.id));
   if (!list.length) return { list, newlyCompleted: [] };
   const email = typeof user === "string" ? user : user?.email;
   const key = email ? `didi_quests_${email}` : `didi_quests_guest`;
@@ -221,4 +230,30 @@ export function progressQuests(user, recipeTitle) {
     window.dispatchEvent(new Event("didi-quests-updated"));
   }
   return { list: next, newlyCompleted };
+}
+
+// ---------- UPSTASH HELPERS - Quests & Market Prices go here, NOT localStorage ----------
+// Use these from Quests.jsx / CostEstimator.jsx:
+export async function fetchMyQuestsFromUpstash(email) {
+  if (!email) return [];
+  try {
+    const r = await fetch(`/api/profile?email=${encodeURIComponent(email)}`);
+    const j = await r.json();
+    const cloud = j?.data?.quests || j?.quests || [];
+    return cloud.filter(q => !isZeroWaste(q.id));
+  } catch { return []; }
+}
+export async function joinQuestOnUpstash({ email, questId, location }) {
+  return fetch("/api/community?type=quests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "join", questId, location: location === "abroad" ? "abroad" : "lagos", email: email || "guest" }),
+  });
+}
+export async function reportMarketPriceToUpstash({ item, price, location, email }) {
+  return fetch("/api/community?type=market-prices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ location: location === "abroad" ? "abroad" : "lagos", item, price, email: email || "guest" }),
+  });
 }
