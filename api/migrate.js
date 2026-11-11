@@ -9,19 +9,24 @@ export default async function handler(req, res) {
 
   const existingRes = await fetch(`${url}/lrange/users/0/-1`, { headers });
   const existingData = await existingRes.json();
-  const existingEmails = new Set((existingData.result || []).map((item) => {
+  const existing = (existingData.result || []).map((item) => {
     try {
       let s = typeof item === 'string' ? item : JSON.stringify(item);
       try { s = decodeURIComponent(s); } catch {}
-      const p = JSON.parse(s);
-      return p.email?.toLowerCase();
+      return JSON.parse(s);
     } catch { return null; }
-  }));
+  }).filter(Boolean);
+
+  const existingEmails = new Set(existing.map(u => u.email?.toLowerCase()));
 
   for (const u of users) {
     if (!u?.email) continue;
     const email = u.email.toLowerCase().trim();
-    if (existingEmails.has(email)) continue;
+    if (existingEmails.has(email)) {
+      // Already exists: only fill in security question if it was missing
+      // We do this via reset-password instead — do NOT overwrite password here
+      continue;
+    }
     await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify({ ...u, email }))}`, { headers });
     existingEmails.add(email);
   }
