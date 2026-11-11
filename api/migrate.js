@@ -10,7 +10,12 @@ export default async function handler(req, res) {
   const existingRes = await fetch(`${url}/lrange/users/0/-1`, { headers });
   const existingData = await existingRes.json();
   const existingEmails = new Set((existingData.result || []).map((item) => {
-    try { const p = typeof item === 'string' ? JSON.parse(item) : item; return p.email?.toLowerCase(); } catch { return null; }
+    try {
+      let s = typeof item === 'string' ? item : JSON.stringify(item);
+      try { s = decodeURIComponent(s); } catch {}
+      const p = JSON.parse(s);
+      return p.email?.toLowerCase();
+    } catch { return null; }
   }));
 
   for (const u of users) {
@@ -18,7 +23,6 @@ export default async function handler(req, res) {
     const email = u.email.toLowerCase().trim();
     if (existingEmails.has(email)) continue;
     await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify({ ...u, email }))}`, { headers });
-    await fetch(`${url}/set/migrated:${encodeURIComponent(email)}/1`, { headers });
     existingEmails.add(email);
   }
   return res.status(200).json({ ok: true });
