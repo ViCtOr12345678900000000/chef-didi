@@ -172,6 +172,14 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed"); return data.recipe;
   };
 
+  // ---------- SCROLL TO RECIPE ON MOBILE - NEW ----------
+  const scrollToRecipe = () => {
+    if (window.innerWidth > 768) return;
+    setTimeout(() => {
+      document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+  };
+
   const handleFindMeal = async () => {
     if (!ingPicker.length) return;
     if (isGuest && guestCount >= 2) {
@@ -180,7 +188,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       return;
     }
     setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true);
-    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); scrollToRecipe(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => { const MAP = { weightloss: { light: 350, heavy: 500 }, normal: { light: 450, heavy: 650 }, fit: { light: 450, heavy: 650 }, weightgain: { light: 550, heavy: 800 } }; const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450; return { perSitting, total: perSitting * sittings }; };
@@ -188,13 +196,13 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const handleGenerateAnother = async () => {
     if (isGuest && guestCount >= 2) { onRequireAuth?.(); return; }
     setError(""); setIsLoading(true);
-    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } scrollToRecipe(); bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const handleSurprise = async () => {
     if (needAuth()) return;
     setShowLazy(false); setRecipe(null); setError(""); setIsLoading(true);
-    try { const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto"; const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad"; const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood); const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }; setLastSurprise(surprisePayload); setGoal(lazyGoal); const r = await callAPI(null, surprisePayload); setRecipe(r); trackQuestProgress(r?.title); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    try { const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto"; const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad"; const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood); const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }; setLastSurprise(surprisePayload); setGoal(lazyGoal); const r = await callAPI(null, surprisePayload); setRecipe(r); trackQuestProgress(r?.title); scrollToRecipe(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const handleAddRecipeToKcal = () => {
@@ -268,7 +276,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           {isGuest && <p className="text-[11px] text-center text-stone-400 mt-2">{Math.max(0, 2 - guestCount)} free recipes left. After that, login is free.</p>}
           <div className="flex justify-between mt-auto pt-4"><button onClick={() => setIngPicker([])} className={`text-[12px] font-semibold text-stone-400 ${theme.accent} flex gap-1 items-center`}><Delete size={14} /> Clear all</button><p className="text-[12px] font-semibold">{ingPicker.length === 0 ? 'Your basket is empty' : `${GOALS[goal]?.label} • ${cal.perSitting} kcal/sitting`}</p></div>
         </div>
-        <div className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1">
+        <div id="ai-response-box" className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1 scroll-mt-4">
           {isLoading && <div className="bg-white rounded-[28px] p-6 shadow-xl animate-pulse"><p className="text-center text-[12px] font-bold text-stone-400">👩🏾‍🍳 Cooking up your recipe...</p></div>}
           {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={() => { setRecipe(null); setIngPicker([]); setLastSurprise(null); }} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} location={location} />}
           {error && !isLoading && <div className="bg-white rounded-[24px] p-5 text-center text-[13px] text-red-600 font-semibold">{error}</div>}
