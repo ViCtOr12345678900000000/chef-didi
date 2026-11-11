@@ -3,52 +3,16 @@ export default async function handler(req, res) {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   const headers = { Authorization: `Bearer ${token}` };
 
-  const get = async (path) => {
-    const r = await fetch(`${url}/${path}`, { headers });
-    const j = await r.json();
-    return j.result;
-  };
+  await fetch(`${url}/incr/total_visitors`, { headers });
 
-  // 1. Total visitors
-  const totalRaw = await get('get/total_visitors');
-  const totalVisitors = parseInt(totalRaw || '0', 10);
+  const ua = req.headers['user-agent'] || '';
+  const device = /Mobile|Android|iPhone|iPad/i.test(ua) ? 'Mobile' : 'Desktop';
+  // Vercel gives us city/country for free
+  const city = decodeURIComponent(req.headers['x-vercel-ip-city'] || 'Unknown');
+  const country = req.headers['x-vercel-ip-country'] || '';
 
-  // 2. Visitors list - flatten in case it's stored as one giant array string
-  const visitorsRaw = await get('lrange/visitors/0/-1') || [];
-  let visitors = [];
-  for (const item of visitorsRaw) {
-    try {
-      const p = JSON.parse(item);
-      if (Array.isArray(p)) visitors.push(...p);
-      else visitors.push(p);
-    } catch { visitors.push(item); }
-  }
+  const visit = JSON.stringify({ city, country, device, time: new Date().toISOString() });
+  await fetch(`${url}/rpush/visitors/${encodeURIComponent(visit)}`, { headers });
 
-  // 3. Users list - same fix, plus dedupe by email
-  const usersRaw = await get('lrange/users/0/-1') || [];
-  let users = [];
-  for (const item of usersRaw) {
-    try {
-      const p = JSON.parse(item);
-      if (Array.isArray(p)) users.push(...p);
-      else users.push(p);
-    } catch {}
-  }
-  // Remove duplicates and hide passwords
-  const seen = new Set();
-  const cleanUsers = [];
-  for (const u of users) {
-    if (!u?.email) continue;
-    const email = u.email.toLowerCase();
-    if (seen.has(email)) continue;
-    seen.add(email);
-    const { password, ...safe } = u;
-    cleanUsers.push(safe);
-  }
-
-  return res.status(200).json({
-    totalVisitors,
-    visitors,
-    users: cleanUsers
-  });
-};
+  return res.status(200).json({ ok: true });
+}
