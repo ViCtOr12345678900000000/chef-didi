@@ -8,22 +8,42 @@ export default function Quests({ user, location = "nigeria", themeId = "purple" 
 
   const marketLoc = location === "abroad" ? "abroad" : "lagos";
 
+  const loadCounts = async () => {
+    try {
+      const r = await fetch(`/api/community?type=quests&location=${marketLoc}`);
+      const j = await r.json();
+      if (j.counts) setCounts(j.counts);
+    } catch {}
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch(`/api/quests?location=${marketLoc}`);
-        const j = await r.json();
-        if (j.counts) setCounts(j.counts);
-      } catch {}
+    loadCounts();
+    const sync = () => {
+      setMyQuests(getQuests(user));
+      loadCounts();
     };
-    load();
-    const sync = () => setMyQuests(getQuests(user));
     window.addEventListener("didi-quests-updated", sync);
     return () => window.removeEventListener("didi-quests-updated", sync);
   }, [user?.email, marketLoc]);
 
   const handleJoin = (id) => {
     setMyQuests(joinQuest(user, id));
+  };
+
+  const handleMarkDone = async (id) => {
+    // This is called when user finishes cooking a quest meal
+    // It bumps the community count so others see it
+    try {
+      const res = await fetch("/api/community?type=quests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questId: id, location: marketLoc, email: user?.email || "guest" }),
+      });
+      const j = await res.json();
+      if (j.totalCompletions !== undefined) {
+        setCounts((prev) => ({ ...prev, [id]: j.totalCompletions }));
+      }
+    } catch {}
   };
 
   const joinedIds = myQuests.map(q => q.id);
@@ -57,7 +77,10 @@ export default function Quests({ user, location = "nigeria", themeId = "purple" 
                 )}
               </div>
               {mine && !mine.completed && (
-                <div className="h-1.5 bg-stone-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} /></div>
+                <>
+                  <div className="h-1.5 bg-stone-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} /></div>
+                  <p className="text-[11px] text-stone-400 mt-1">Cook a matching recipe to progress. It auto-tracks when you generate a recipe.</p>
+                </>
               )}
               {mine?.completed && <p className="text-[11px] text-green-600 font-bold mt-1">🎉 Badge earned: {q.reward}</p>}
             </div>
