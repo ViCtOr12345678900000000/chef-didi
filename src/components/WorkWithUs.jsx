@@ -14,11 +14,36 @@ export default function WorkWithUs({ theme, compact = false }) {
     e.preventDefault();
     if (!name || !brand || !want || !contact) { alert('Please fill Name, Brand, What you want, and WhatsApp/Email'); return; }
     setLoading(true);
+
+    // 1. Save to Upstash (your database)
     try {
-      const res = await fetch('/api/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, brand, want, budget, contact, about }) });
-      if (!res.ok) throw new Error('Failed');
+      await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, brand, want, budget, contact, about }),
+      });
+    } catch {}
+
+    // 2. Send email via FormSubmit - EXACT SAME AS Advertise.jsx
+    try {
+      const formData = new FormData();
+      formData.append('_subject', 'New Partner - Chef Didi');
+      formData.append('_captcha', 'false');
+      formData.append('Name', name);
+      formData.append('Brand', brand);
+      formData.append('Slot', want);
+      formData.append('Budget', budget);
+      formData.append('Contact', contact);
+      formData.append('Message', about);
+
+      await fetch('https://formsubmit.co/ajax/Vardevictor78@gmail.com', {
+        method: 'POST',
+        body: formData,
+      });
       setSent(true);
-    } catch { alert('Network error. Please try again.'); }
+    } catch {
+      alert('Network error. Please try again.');
+    }
     setLoading(false);
   };
 
