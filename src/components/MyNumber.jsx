@@ -1,14 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
 const PAGE_SIZE = 20;
 
-// Merge duplicates: NG = Nigeria, US = United States
 function normalizeCountry(c) {
   const s = String(c || "Unknown").trim();
   const map = { NG: "Nigeria", Nigeria: "Nigeria", US: "United States", USA: "United States", "United States": "United States", GB: "United Kingdom", UK: "United Kingdom" };
   return map[s] || map[s.toUpperCase()] || s;
 }
 
-// Old bot entries: datacentre city + generic device, or no real city
 function isOldBot(v) {
   const city = String(v.city || "").toLowerCase();
   const datacenters = ["san jose", "ashburn", "boardman", "dulles", "prineville", "hillsboro", "quincy", "the dalles", "council bluffs", "moncks corner"];
@@ -36,7 +34,7 @@ export default function MyNumber() {
 
   const allVisitors = (data?.visitors || []).map(v => ({ ...v, country: normalizeCountry(v.country) }));
   const users = data?.users || [];
-  // By default hide old bots. Toggle to see them if you want to audit.
+  const reviews = data?.reviews || [];
   const visitors = showBots ? allVisitors : allVisitors.filter(v => !isOldBot(v));
   const hiddenBotCount = allVisitors.length - visitors.length;
 
@@ -60,10 +58,31 @@ export default function MyNumber() {
     return users.filter(u => `${u.name} ${u.email}`.toLowerCase().includes(s));
   }, [users, search]);
 
-  const list = tab === "visitors" ? filteredVisitors : filteredUsers;
+  // INTEGRATED: Reviews tab - same search / pagination as other tabs
+  const filteredReviews = useMemo(() => {
+    if (!search) return reviews;
+    const s = search.toLowerCase();
+    return reviews.filter(r => `${r.name} ${r.comment} ${r.email}`.toLowerCase().includes(s));
+  }, [reviews, search]);
+
+  const list = tab === "visitors" ? filteredVisitors : tab === "users" ? filteredUsers : filteredReviews;
   const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageItems = list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const handleDeleteReview = async (rev) => {
+    if (!window.confirm(`Delete review from ${rev.name}?`)) return;
+    try {
+      const res = await fetch("/api/my-number", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "reviews", id: rev.id, createdAt: rev.createdAt, comment: rev.comment, email: rev.email }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Delete failed");
+      load();
+    } catch (e) { alert(e.message); }
+  };
 
   if (loading || !data) return <div style={{ background: "#0F0F10", color: "white", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui" }}>Loading dashboard...</div>;
 
@@ -84,6 +103,7 @@ export default function MyNumber() {
           <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>REAL VISITS</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0" }}>{visitors.length}</p><p style={{ fontSize: "11px", color: "#666", margin: 0 }}>{hiddenBotCount} old bot entries hidden</p></div>
           <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>COUNTRIES REACHED</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0", color: "#4ADE80" }}>{countries.length}</p></div>
           <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>REGISTERED USERS</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0", color: "#A78BFA" }}>{users.length}</p></div>
+          <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>REVIEWS</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0", color: "#FBBF24" }}>{reviews.length}</p></div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "16px 0 8px" }}>
@@ -100,9 +120,10 @@ export default function MyNumber() {
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
           <button onClick={() => setTab("visitors")} style={chip(tab === "visitors")}>Visitors {countryFilter !== "all" ? `in ${countryFilter} ` : ""}({filteredVisitors.length})</button>
           <button onClick={() => setTab("users")} style={chip(tab === "users")}>Users ({filteredUsers.length})</button>
+          <button onClick={() => setTab("reviews")} style={chip(tab === "reviews")}>Reviews ({filteredReviews.length})</button>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "visitors" ? "Search city, country, device..." : "Search name or email..."} style={inputStyle} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "visitors" ? "Search city, country, device..." : tab === "users" ? "Search name or email..." : "Search review, name..."} style={inputStyle} />
           {tab === "visitors" && (
             <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} style={{ height: "40px", borderRadius: "999px", background: "#1A1A1C", color: "white", border: "1px solid #2A2A2E", padding: "0 12px", fontSize: "13px" }}>
               <option value="all">All countries</option>
@@ -111,7 +132,7 @@ export default function MyNumber() {
           )}
         </div>
         <div style={{ background: "#141415", border: "1px solid #222", borderRadius: "16px", overflow: "hidden" }}>
-          {pageItems.length === 0 && <p style={{ padding: "20px", color: "#777", textAlign: "center", fontSize: "13px" }}>Nothing in {countryFilter} yet.</p>}
+          {pageItems.length === 0 && <p style={{ padding: "20px", color: "#777", textAlign: "center", fontSize: "13px" }}>Nothing in {tab} yet.</p>}
           {tab === "visitors" && pageItems.map((v, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "12px 16px", borderBottom: "1px solid #222" }}>
               <div><p style={{ margin: 0, fontSize: "13px", fontWeight: 600 }}>{v.city}, {v.country}</p><p style={{ margin: "2px 0 0", color: "#777", fontSize: "12px" }}>{v.device || "Unknown device"}</p></div>
@@ -124,10 +145,23 @@ export default function MyNumber() {
               <p style={{ margin: 0, color: "#888", fontSize: "12px", whiteSpace: "nowrap" }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-NG", { dateStyle: "medium" }) : ""}</p>
             </div>
           ))}
+          {tab === "reviews" && pageItems.map((r, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "12px 16px", borderBottom: "1px solid #222", alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: 600 }}>{r.name} <span style={{ color: "#FBBF24" }}>{"⭐".repeat(Number(r.rating) || 5)}</span></p>
+                <p style={{ margin: "4px 0 0", color: "#ccc", fontSize: "13px", lineHeight: 1.4 }}>{r.comment}</p>
+                <p style={{ margin: "4px 0 0", color: "#777", fontSize: "11px" }}>{r.email || ""}</p>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <p style={{ margin: 0, color: "#888", fontSize: "12px", whiteSpace: "nowrap" }}>{r.createdAt ? new Date(r.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" }) : ""}</p>
+                <button onClick={() => handleDeleteReview(r)} style={{ marginTop: 6, background: "#2A1A1A", color: "#F87171", border: "1px solid #3A2222", borderRadius: "999px", padding: "5px 10px", fontSize: "11px", cursor: "pointer", fontWeight: 700 }}>Delete</button>
+              </div>
+            </div>
+          ))}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
           <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} style={{ background: "#1A1A1C", color: "white", border: "1px solid #2A2A2E", padding: "9px 16px", borderRadius: "999px", opacity: safePage <= 1 ? 0.4 : 1, cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>← Prev</button>
-          <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>Page {safePage} of {totalPages} • {list.length} shown {countryFilter !== "all" ? `in ${countryFilter}` : ""}</p>
+          <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>Page {safePage} of {totalPages} • {list.length} shown {tab === "visitors" && countryFilter !== "all" ? `in ${countryFilter}` : ""}</p>
           <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)} style={{ background: "white", color: "black", border: "none", padding: "9px 16px", borderRadius: "999px", opacity: safePage >= totalPages ? 0.4 : 1, cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>Next →</button>
         </div>
       </div>
