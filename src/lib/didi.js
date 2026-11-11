@@ -140,3 +140,36 @@ export function getSwaps(ing) {
   const key = Object.keys(SWAPS).find(k => String(ing).toLowerCase().includes(k.toLowerCase()));
   return key ? SWAPS[key] : ["Onion", "Garlic", "Any similar ingredient"];
 }
+
+// ---------- MARKET PRICES (Community + Local Fallback) ----------
+// DEFAULT = fallback when no one has reported a price yet for that area.
+// Once users report via /api/market-prices, CostEstimator overwrites these with community averages.
+export const DEFAULT_MARKET_PRICES = {
+  "rice": 2500, "chicken": 4500, "tomato": 1200, "pepper": 800,
+  "onion": 900, "yam": 3000, "beans": 1800, "plantain": 1500,
+  "eggs": 200, "beef": 5000, "oil": 3500, "garri": 1500,
+  "egusi": 2200, "crayfish": 1800, "palm oil": 2800, "maggi": 500,
+  "stockfish": 4000, "ugu": 800, "potato": 1200, "butter": 2500,
+  "fettuccine": 3500, "heavy cream": 4000, "parmesan": 6000,
+  "cheese": 4500, "pasta": 2500, "salt": 500, "garlic": 1000,
+};
+
+export function getMarketPrices() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("didi_market_prices") || "{}");
+    return { ...DEFAULT_MARKET_PRICES, ...saved };
+  } catch { return DEFAULT_MARKET_PRICES; }
+}
+
+export function saveMarketPrice(key, price) {
+  const current = getMarketPrices();
+  const next = { ...current, [String(key).toLowerCase()]: parseInt(price) };
+  localStorage.setItem("didi_market_prices", JSON.stringify(next));
+  window.dispatchEvent(new Event("didi-market-updated"));
+  return next;
+}
+
+// Helper: map your location picker ("nigeria" / "abroad") to market location ("lagos" / "abroad")
+export function marketLocationFor(location) {
+  return location === "abroad" ? "abroad" : "lagos";
+}
