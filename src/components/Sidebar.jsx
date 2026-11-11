@@ -35,9 +35,9 @@ export default function Sidebar({ theme, open, onClose, user }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
           {tab === 'home' ? (
-            <div className="space-y-2">
+            <div className="space-y-2 w-full max-w-full overflow-hidden">
               <button onClick={onClose} className="w-full flex items-center gap-3 p-3.5 rounded-2xl hover:bg-stone-50 transition text-left">
                 <span className={`w-10 h-10 rounded-xl ${theme.softBg} ${theme.accent} flex items-center justify-center`}><Home size={18} /></span>
                 <span><span className="block text-[14px] font-bold text-[#1A1A2E]">Home</span><span className="block text-[12px] text-stone-500">Find a recipe from your ingredients</span></span>
@@ -52,8 +52,10 @@ export default function Sidebar({ theme, open, onClose, user }) {
                 <p className="text-[12.5px] text-stone-600 leading-relaxed mt-2">Enter what you have. Didi gives you a recipe — no waste, no stress. Save favourites, track kcal, and cook in your language.</p>
               </div>
 
-              {/* AD - In Sidebar Menu */}
-              <AdSlot slot="2222222222" />
+              {/* AD - In Sidebar Menu - Fixed Width */}
+              <div className="w-full max-w-full overflow-hidden">
+                <AdSlot slot="2222222222" inSidebar={true} />
+              </div>
             </div>
           ) : (
             <WorkWithUs theme={theme} compact />
