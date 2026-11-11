@@ -38,7 +38,7 @@ export default function Footer({ lang = "en", themeId = "purple", onPickPopular,
     setSending(true);
     setMsg("");
     try {
-      const res = await fetch("/api/reviews", {
+      const res = await fetch("/api/my-number", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
