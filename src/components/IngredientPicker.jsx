@@ -172,12 +172,12 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed"); return data.recipe;
   };
 
-  // ---------- SCROLL TO RECIPE ON MOBILE - NEW ----------
+  // ---------- SCROLL TO RECIPE ON MOBILE - FIXED FOR SURPRISE ME ----------
   const scrollToRecipe = () => {
     if (window.innerWidth > 768) return;
-    setTimeout(() => {
-      document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 300);
+    // Scroll twice: once fast, once after React renders + Cook For Me modal closes
+    setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 350);
+    setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 900);
   };
 
   const handleFindMeal = async () => {
@@ -298,7 +298,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
         </div>
         {(showFav || showHist) && !isGuest && (
           <div className="bg-white rounded-[24px] p-4 shadow-xl mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(showFav ? favList : histList).length === 0 ? <p className="text-[12px] text-stone-400 col-span-2 text-center py-3">Nothing here yet. Generate a recipe and ❤️ it.</p> : (showFav ? favList : histList).map(r => (<button key={r.title + (r.savedAt || r.viewedAt || "")} onClick={() => setRecipe(r)} className="text-left border rounded-2xl p-3 flex justify-between items-center"><span><span className="block text-[13px] font-bold">{r.title}</span><span className="block text-[11px] text-stone-400">{r.time} • {r.caloriesPerSitting || r.calories}</span></span><span className="text-[12px]">→</span></button>))}
+            {(showFav ? favList : histList).length === 0 ? <p className="text-[12px] text-stone-400 col-span-2 text-center py-3">Nothing here yet. Generate a recipe and ❤️ it.</p> : (showFav ? favList : histList).map(r => (<button key={r.title + (r.savedAt || r.viewedAt || "")} onClick={() => { setRecipe(r); scrollToRecipe(); }} className="text-left border rounded-2xl p-3 flex justify-between items-center"><span><span className="block text-[13px] font-bold">{r.title}</span><span className="block text-[11px] text-stone-400">{r.time} • {r.caloriesPerSitting || r.calories}</span></span><span className="text-[12px]">→</span></button>))}
           </div>
         )}
         {showShop && !isGuest && (
