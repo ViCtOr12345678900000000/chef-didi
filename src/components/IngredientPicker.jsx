@@ -1,5 +1,5 @@
 import { Search, PlusCircleIcon, Delete, Clock, CookingPot, UtensilsCrossed, TrendingDown, TrendingUp, Dumbbell, Sparkles, X, MoonStar, Salad, Soup, Flag, Plane, Dices, Globe, Heart, History, ShoppingCart, Check, Lock } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AIResponse from "./AIResponse";
 import Footer from "./Footer";
 import SettingsBar from "./SettingsBar";
@@ -28,6 +28,8 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [pantry, setPantry] = useState(() => getPantry(user));
   const [pantryInput, setPantryInput] = useState("");
   const [guestCount, setGuestCount] = useState(() => parseInt(localStorage.getItem("didi_guest_count") || "0"));
+  const [cloudVersion, setCloudVersion] = useState(0);
+  const syncTimer = useRef(null);
 
   const needAuth = () => {
     if (isGuest) {
@@ -35,6 +37,40 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       return true;
     }
     return false;
+  };
+
+  // ---------- AUTO-SYNC TO CLOUD (debounced) ----------
+  const syncCloud = () => {
+    if (!user?.email) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        const email = user.email.toLowerCase().trim();
+        const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
+        const found = users.find((u) => u.email === email);
+        const kcal = {};
+        const water = {};
+        for (let i = 0; i < 30; i++) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          const day = d.toISOString().slice(0, 10);
+          const v = localStorage.getItem(`didi_kcal_${email}_${day}`);
+          if (v) kcal[day] = JSON.parse(v);
+          const w = localStorage.getItem(`didi_water_${email}_${day}`);
+          if (w) water[day] = JSON.parse(w);
+        }
+        const bundle = {
+          email, name: user.name || found?.name || "", password: found?.password || "",
+          prefs: getPrefs(email),
+          fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
+          history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
+          shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
+          pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
+          weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
+          kcal, water, createdAt: new Date().toISOString(), migrated: true,
+        };
+        await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, data: bundle }) });
+      } catch {}
+    }, 800);
   };
 
   // LOCKED CUSTOM KCAL: guests cannot set it
@@ -53,18 +89,48 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     localStorage.setItem("didi_guest_count", String(next));
   };
 
-useEffect(() => {
-  const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };
-  sync();
-  window.addEventListener("didi-fav-updated", sync); window.addEventListener("didi-history-updated", sync); window.addEventListener("didi-shopping-updated", sync); window.addEventListener("didi-pantry-updated", sync);
-  return () => { window.removeEventListener("didi-fav-updated", sync); window.removeEventListener("didi-history-updated", sync); window.removeEventListener("didi-shopping-updated", sync); window.removeEventListener("didi-pantry-updated", sync); };
-}, [user?.email]);
-  useEffect(() => { if (user?.email) savePrefs(user.email, { goal, theme: themeId, lang, sittings, customCalories, cuisine, location }); }, [goal, themeId, lang, sittings, customCalories, cuisine, location, user?.email]);
+  // ---------- SYNC LISTS + PREFS WHEN USER CHANGES OR CLOUD RESTORES ----------
   useEffect(() => {
-    const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };
-    window.addEventListener("didi-fav-updated", sync); window.addEventListener("didi-history-updated", sync); window.addEventListener("didi-shopping-updated", sync); window.addEventListener("didi-pantry-updated", sync);
-    return () => { window.removeEventListener("didi-fav-updated", sync); window.removeEventListener("didi-history-updated", sync); window.removeEventListener("didi-shopping-updated", sync); window.removeEventListener("didi-pantry-updated", sync); };
+    const sync = () => {
+      setFavList(getFavourites(user));
+      setHistList(getHistory(user));
+      setShopList(getShopping(user));
+      setPantry(getPantry(user));
+      if (user?.email) {
+        const p = getPrefs(user.email);
+        if (p.goal) setGoal(p.goal);
+        if (p.sittings) setSittings(p.sittings);
+        if (p.customCalories !== undefined) setCustomCalories(p.customCalories);
+        if (p.cuisine) setCuisine(p.cuisine);
+        if (p.location) setLocation(p.location);
+      }
+    };
+    sync();
+    const onRestored = () => { sync(); setCloudVersion((v) => v + 1); };
+    const onKcal = () => { setCloudVersion((v) => v + 1); syncCloud(); };
+    window.addEventListener("didi-fav-updated", sync);
+    window.addEventListener("didi-history-updated", sync);
+    window.addEventListener("didi-shopping-updated", sync);
+    window.addEventListener("didi-pantry-updated", sync);
+    window.addEventListener("didi-data-restored", onRestored);
+    window.addEventListener("didi-kcal-updated", onKcal);
+    return () => {
+      window.removeEventListener("didi-fav-updated", sync);
+      window.removeEventListener("didi-history-updated", sync);
+      window.removeEventListener("didi-shopping-updated", sync);
+      window.removeEventListener("didi-pantry-updated", sync);
+      window.removeEventListener("didi-data-restored", onRestored);
+      window.removeEventListener("didi-kcal-updated", onKcal);
+    };
   }, [user?.email]);
+
+  useEffect(() => {
+    if (user?.email) {
+      savePrefs(user.email, { goal, theme: themeId, lang, sittings, customCalories, cuisine, location });
+      syncCloud();
+    }
+  }, [goal, themeId, lang, sittings, customCalories, cuisine, location, user?.email]);
+
   const theme = THEMES[themeId] || THEMES.purple;
   const cal = caloriesFor(goal, sittings, customCalories);
   const [ingPicker, setIngPicker] = useState([]);
@@ -107,13 +173,13 @@ useEffect(() => {
 
   const handleAddRecipeToKcal = () => {
     if (needAuth()) return;
-    if (!recipe) return; const today = new Date().toISOString().slice(0, 10); const key = user?.email ? `didi_kcal_${user.email}_${today}` : `didi_kcal_guest_${today}`; const kcalNum = parseInt(String(recipe.caloriesPerSitting || recipe.calories || "0").replace(/[^0-9]/g, "")) || 0; const existing = JSON.parse(localStorage.getItem(key) || "[]"); localStorage.setItem(key, JSON.stringify([...existing, { id: Date.now(), name: recipe.title, qty: 1, unit: "serving", kcal: kcalNum, totalKcal: kcalNum }])); window.dispatchEvent(new Event("didi-kcal-updated")); alert(`Added ${recipe.title} • ${kcalNum} kcal to today's calculator 🔥`);
+    if (!recipe) return; const today = new Date().toISOString().slice(0, 10); const key = user?.email ? `didi_kcal_${user.email}_${today}` : `didi_kcal_guest_${today}`; const kcalNum = parseInt(String(recipe.caloriesPerSitting || recipe.calories || "0").replace(/[^0-9]/g, "")) || 0; const existing = JSON.parse(localStorage.getItem(key) || "[]"); localStorage.setItem(key, JSON.stringify([...existing, { id: Date.now(), name: recipe.title, qty: 1, unit: "serving", kcal: kcalNum, totalKcal: kcalNum }])); window.dispatchEvent(new Event("didi-kcal-updated")); syncCloud(); alert(`Added ${recipe.title} • ${kcalNum} kcal to today's calculator 🔥`);
   };
 
   const addPantryItem = () => {
     if (needAuth()) return;
     if (!pantryInput.trim()) return;
-    const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput("");
+    const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput(""); syncCloud();
   };
 
   return (
@@ -141,7 +207,7 @@ useEffect(() => {
             <button onClick={() => onRequireAuth?.()} className={`shrink-0 h-9 px-4 rounded-full bg-gradient-to-r ${theme.btn} text-white text-[12px] font-bold`}>Login to Unlock →</button>
           </div>
         ) : (
-          <CalorieCalculator user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} />
+          <CalorieCalculator key={cloudVersion} user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} />
         )}
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
