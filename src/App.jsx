@@ -14,7 +14,6 @@ export default function App() {
 
   const theme = THEMES[themeId] || THEMES.purple;
 
-  // UNLOCKED: theme + language are free to test, no login needed
   const handleThemeChange = (newTheme) => {
     setThemeId(newTheme);
   };
@@ -23,7 +22,6 @@ export default function App() {
     setLang(newLang);
   };
 
-  // ---------- RESTORE CLOUD DATA INTO localStorage ----------
   const restoreFromCloud = async (email) => {
     try {
       const clean = email.toLowerCase().trim();
@@ -54,7 +52,6 @@ export default function App() {
     }
   };
 
-  // ---------- AUTO-MIGRATE ONCE: for login only ----------
   const doMigrate = async () => {
     try {
       const s = getSession();
@@ -72,7 +69,6 @@ export default function App() {
     } catch {}
   };
 
-  // ---------- ON LOAD: restore session + cloud data ----------
   useEffect(() => {
     const s = getSession();
     if (s) {
@@ -84,7 +80,6 @@ export default function App() {
         window.dispatchEvent(new Event("didi-data-restored"));
       });
     } else {
-      // Guest: restore last tested gradient so it sticks
       try {
         const g = JSON.parse(localStorage.getItem("didi_prefs_guest") || "{}");
         if (g.theme) setThemeId(g.theme);
@@ -105,7 +100,6 @@ export default function App() {
     }
   }, []);
 
-  // Save theme/lang for BOTH logged-in + guest users
   useEffect(() => {
     if (user?.email) {
       savePrefs(user.email, { theme: themeId, lang });
@@ -114,7 +108,6 @@ export default function App() {
     }
   }, [themeId, lang, user?.email]);
 
-  // ---------- LOGIN: download cloud data FIRST ----------
   const handleAuth = async (u) => {
     const session = { email: u.email, name: u.name };
     setUser(session);
@@ -124,16 +117,12 @@ export default function App() {
     await restoreFromCloud(u.email);
 
     const p = getPrefs(u.email);
-    // If cloud has no theme yet, keep the gradient the guest was just testing
-    // instead of snapping back to purple
     if (p.theme) setThemeId(p.theme);
     if (p.lang) setLang(p.lang);
     window.dispatchEvent(new Event("didi-data-restored"));
   };
 
   const handleLogout = () => {
-    // Keep the current gradient on logout, don't snap back to purple
-    // so the guest experience stays smooth
     const currentTheme = themeId;
     const currentLang = lang;
     logoutUser();
@@ -146,6 +135,7 @@ export default function App() {
   const prefs = user?.email ? getPrefs(user.email) : null;
 
   // SECRET PAGE - Only opens with #advertise link. No link on homepage.
+  // Test link: https://chef-didi-9vo3.vercel.app/#advertise
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') {
     return <Advertise />;
   }
