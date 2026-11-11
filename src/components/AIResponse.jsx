@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check, Copy, MessageCircle, Pause, Play, Sparkles } from "lucide-react";
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
-export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user }) {
+import { getDiasporaSwap } from "../lib/translator";
+import CostEstimator from "./CostEstimator";
+
+export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
   const [fav, setFav] = useState(false);
   const [cookMode, setCookMode] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
@@ -56,20 +59,31 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         <div className="bg-[#FBFAFF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">✓ You have</p>{(recipe.youHave || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
         <div className="bg-[#F5F0FF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">You might need</p>{(recipe.youMightNeed || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
       </div>
+
+      {/* TRANSLATOR + COST ESTIMATOR */}
       <div className="flex items-center justify-between mb-2"><p className="font-bold text-[13px]">Ingredients</p><span className="text-[11px] text-stone-400">Tap 🔄 to swap</span></div>
       <div className="mb-4 space-y-1">
-        {allIngredients.map((x, i) => (
-          <div key={i} className="flex items-center justify-between gap-2">
-            <p className="text-[12px] text-stone-600">• {x} {swapped[recipe.ingredients[i]] && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">swapped</span>}</p>
-            <button onClick={() => setShowSwapFor(showSwapFor === i ? null : i)} className="text-[11px] font-bold text-stone-400 flex items-center gap-1"><RefreshCw size={11} /> Swap</button>
-          </div>
-        ))}
+        {allIngredients.map((x, i) => {
+          const swap = getDiasporaSwap(x, location);
+          return (
+            <div key={i}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[12px] text-stone-600">• {x} {swapped[recipe.ingredients[i]] && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">swapped</span>}</p>
+                <button onClick={() => setShowSwapFor(showSwapFor === i ? null : i)} className="text-[11px] font-bold text-stone-400 flex items-center gap-1"><RefreshCw size={11} /> Swap</button>
+              </div>
+              {swap && <p className="text-[11px] text-blue-600 ml-3">✈️ Abroad: Use <b>{swap}</b> instead</p>}
+            </div>
+          );
+        })}
         {showSwapFor !== null && (
           <div className="flex flex-wrap gap-1.5 mt-1 p-2 bg-stone-50 rounded-xl">
             {getSwaps(recipe.ingredients[showSwapFor]).map(s => (<button key={s} onClick={() => { setSwapped(p => ({ ...p, [recipe.ingredients[showSwapFor]]: s })); setShowSwapFor(null); }} className="text-[11px] font-bold bg-white border px-2.5 py-1 rounded-full">{s}</button>))}
           </div>
         )}
       </div>
+
+      <CostEstimator ingredients={allIngredients} location={location} sittings={sittings} user={user} />
+
       <p className="font-bold text-[13px] mb-2">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
       <div className="space-y-3 mb-4">
         {cleanSteps.map((s, i) => {
