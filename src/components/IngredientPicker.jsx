@@ -172,12 +172,19 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed"); return data.recipe;
   };
 
-  // ---------- SCROLL TO RECIPE ON MOBILE - FIXED FOR SURPRISE ME ----------
+  // ---------- SCROLL AS SOON AS MODAL DISAPPEARS - NOT AFTER RECIPE ----------
+  const scrollAsSoonAsModalCloses = () => {
+    if (window.innerWidth > 768) return;
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    });
+  };
+  // Kept for History / Generate Another clicks (no modal there)
   const scrollToRecipe = () => {
     if (window.innerWidth > 768) return;
-    // Scroll twice: once fast, once after React renders + Cook For Me modal closes
-    setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 350);
-    setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 900);
+    setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
   };
 
   const handleFindMeal = async () => {
@@ -188,7 +195,8 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       return;
     }
     setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true);
-    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); scrollToRecipe(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    scrollToRecipe();
+    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => { const MAP = { weightloss: { light: 350, heavy: 500 }, normal: { light: 450, heavy: 650 }, fit: { light: 450, heavy: 650 }, weightgain: { light: 550, heavy: 800 } }; const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450; return { perSitting, total: perSitting * sittings }; };
@@ -196,13 +204,24 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const handleGenerateAnother = async () => {
     if (isGuest && guestCount >= 2) { onRequireAuth?.(); return; }
     setError(""); setIsLoading(true);
-    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } scrollToRecipe(); bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    scrollToRecipe();
+    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const handleSurprise = async () => {
     if (needAuth()) return;
-    setShowLazy(false); setRecipe(null); setError(""); setIsLoading(true);
-    try { const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto"; const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad"; const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood); const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }; setLastSurprise(surprisePayload); setGoal(lazyGoal); const r = await callAPI(null, surprisePayload); setRecipe(r); trackQuestProgress(r?.title); scrollToRecipe(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    setShowLazy(false); // 1. Close modal FIRST
+    scrollAsSoonAsModalCloses(); // 2. Scroll IMMEDIATELY - while modal is disappearing, before API starts
+    setRecipe(null); setError(""); setIsLoading(true);
+    try {
+      const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto";
+      const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad";
+      const lazyCal = lazyCaloriesFor(lazyGoal, lazyMood);
+      const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] };
+      setLastSurprise(surprisePayload); setGoal(lazyGoal);
+      const r = await callAPI(null, surprisePayload);
+      setRecipe(r); trackQuestProgress(r?.title);
+    } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const handleAddRecipeToKcal = () => {
@@ -216,11 +235,19 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput(""); syncCloud();
   };
 
-  const handleZeroWaste = (leftoversText) => {
+  const handleZeroWaste = async (leftoversText) => {
     const items = leftoversText.split(",").map(s => s.trim()).filter(Boolean);
     const cleaned = items.map(i => i.replace(/^(Leftover|Old|Cooked|Boiled)\s+/i, "").trim());
     setIngPicker(cleaned);
     setRecipe(null);
+    try {
+      const { newlyCompleted } = progressQuests(user, "Zero Waste Hero");
+      if (newlyCompleted.length) {
+        newlyCompleted.forEach(id => {
+          fetch("/api/community?type=quests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", questId: id, location: location === "abroad" ? "abroad" : "lagos", email: user?.email || "guest" }) }).catch(() => {});
+        });
+      }
+    } catch {}
     setTimeout(() => { document.getElementById("find-meal-btn")?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 200);
   };
 
