@@ -13,17 +13,13 @@ export default function App() {
 
   const theme = THEMES[themeId] || THEMES.purple;
 
-  const requireLogin = () => {
-    if (!user) {
-      setShowAuth(true);
-      return false;
-    }
-    return true;
+  // UNLOCKED: theme + language are free to test, no login needed
+  const handleThemeChange = (newTheme) => {
+    setThemeId(newTheme);
   };
 
-  const handleThemeChange = (newTheme) => {
-    if (!requireLogin()) return;
-    setThemeId(newTheme);
+  const handleLangChange = (newLang) => {
+    setLang(newLang);
   };
 
   // ---------- RESTORE CLOUD DATA INTO localStorage ----------
@@ -66,7 +62,6 @@ export default function App() {
       const email = s.email.toLowerCase().trim();
       const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
       const found = users.find((u) => u.email === email);
-      // Only push the account for login — data sync is now automatic in IngredientPicker / CalorieCalculator
       await fetch("/api/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,10 +82,16 @@ export default function App() {
         setLang(p.lang || 'en');
         window.dispatchEvent(new Event("didi-data-restored"));
       });
+    } else {
+      // Guest: restore last tested gradient so it sticks
+      try {
+        const g = JSON.parse(localStorage.getItem("didi_prefs_guest") || "{}");
+        if (g.theme) setThemeId(g.theme);
+        if (g.lang) setLang(g.lang);
+      } catch {}
     }
   }, []);
 
-  // AUTO MIGRATION on load
   useEffect(() => {
     doMigrate();
   }, []);
@@ -103,8 +104,13 @@ export default function App() {
     }
   }, []);
 
+  // Save theme/lang for BOTH logged-in + guest users
   useEffect(() => {
-    if (user?.email) savePrefs(user.email, { theme: themeId, lang });
+    if (user?.email) {
+      savePrefs(user.email, { theme: themeId, lang });
+    } else {
+      localStorage.setItem("didi_prefs_guest", JSON.stringify({ theme: themeId, lang }));
+    }
   }, [themeId, lang, user?.email]);
 
   // ---------- LOGIN: download cloud data FIRST ----------
@@ -117,16 +123,23 @@ export default function App() {
     await restoreFromCloud(u.email);
 
     const p = getPrefs(u.email);
-    setThemeId(p.theme || 'purple');
-    setLang(p.lang || 'en');
+    // If cloud has no theme yet, keep the gradient the guest was just testing
+    // instead of snapping back to purple
+    if (p.theme) setThemeId(p.theme);
+    if (p.lang) setLang(p.lang);
     window.dispatchEvent(new Event("didi-data-restored"));
   };
 
   const handleLogout = () => {
+    // Keep the current gradient on logout, don't snap back to purple
+    // so the guest experience stays smooth
+    const currentTheme = themeId;
+    const currentLang = lang;
     logoutUser();
     setUser(null);
-    setThemeId('purple');
-    setLang('en');
+    setThemeId(currentTheme);
+    setLang(currentLang);
+    localStorage.setItem("didi_prefs_guest", JSON.stringify({ theme: currentTheme, lang: currentLang }));
   };
 
   const prefs = user?.email ? getPrefs(user.email) : null;
@@ -175,7 +188,7 @@ export default function App() {
 
         {!user && (
           <p className="text-[11px] text-stone-400 mt-2">
-            Login to save your Goal • Theme • Language • Kcal history
+            Try any colour below 👇 — Login to save your Goal • Theme • Language • Kcal history
           </p>
         )}
       </div>
@@ -185,7 +198,7 @@ export default function App() {
         themeId={themeId} 
         setThemeId={handleThemeChange} 
         lang={lang} 
-        setLang={setLang} 
+        setLang={handleLangChange} 
         onRequireAuth={() => setShowAuth(true)} 
       />
 
