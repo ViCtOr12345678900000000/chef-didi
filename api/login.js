@@ -1,6 +1,8 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
   const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ ok: false, error: 'Email and password required' });
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -8,20 +10,20 @@ export default async function handler(req, res) {
   const data = await r.json();
   const rawList = data.result || [];
 
-  // Handle both formats: single user per item AND old giant-array item
   let allUsers = [];
   for (const item of rawList) {
     try {
-      const parsed = JSON.parse(item);
+      const parsed = typeof item === 'string' ? JSON.parse(item) : item;
       if (Array.isArray(parsed)) allUsers.push(...parsed);
       else allUsers.push(parsed);
     } catch {}
   }
 
-  const found = allUsers.find(u => u?.email?.toLowerCase() === email?.toLowerCase());
-  if (!found) return res.status(404).json({ error: 'No account' });
-  if (found.password !== password) return res.status(401).json({ error: 'Wrong password' });
+  const cleanEmail = email.toLowerCase().trim();
+  const found = allUsers.find(u => u?.email?.toLowerCase().trim() === cleanEmail);
+  if (!found) return res.status(404).json({ ok: false, error: 'No account with this email. Please register first.' });
+  if (found.password !== password) return res.status(401).json({ ok: false, error: 'Wrong password. Try again.' });
 
   const { password: _, ...safe } = found;
-  return res.status(200).json({ user: safe });
+  return res.status(200).json({ ok: true, user: safe });
 }
