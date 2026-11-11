@@ -6,6 +6,7 @@ import MyNumber from './components/MyNumber';
 import Advertise from './components/Advertise';
 import Sidebar from './components/Sidebar';
 import AdSlot from './components/AdSlot';
+import Footer from './components/Footer';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
 export default function App() {
@@ -32,6 +33,11 @@ export default function App() {
       if (data.shopping) localStorage.setItem(`didi_shopping_${clean}`, JSON.stringify(data.shopping));
       if (data.pantry) localStorage.setItem(`didi_pantry_${clean}`, JSON.stringify(data.pantry));
       if (data.weights) localStorage.setItem(`didi_weights_${clean}`, JSON.stringify(data.weights));
+      // Zero Waste Hero filtered out on restore
+      if (data.quests) {
+        const filtered = data.quests.filter(q => q.id !== "zero-waste-3" && q.id !== "zero_waste" && q.id !== "zero_waste_hero" && !String(q.id).toLowerCase().includes("zero"));
+        localStorage.setItem(`didi_quests_${clean}`, JSON.stringify(filtered));
+      }
       if (data.kcal) for (const [day, items] of Object.entries(data.kcal)) localStorage.setItem(`didi_kcal_${clean}_${day}`, JSON.stringify(items));
       if (data.water) for (const [day, n] of Object.entries(data.water)) localStorage.setItem(`didi_water_${clean}_${day}`, JSON.stringify(n));
       return true;
@@ -110,14 +116,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white w-[100vw] py-8 relative">
       <div className={`absolute top-0 left-0 right-0 h-[180px] bg-gradient-to-b ${theme.softBg} to-white pointer-events-none`} />
-
-      {/* HAMBURGER BUTTON */}
       <button onClick={() => setShowSidebar(true)} className={`fixed top-4 left-4 z-40 w-11 h-11 rounded-full bg-white border ${theme.softBorder} shadow-md flex items-center justify-center ${theme.accent} hover:scale-105 active:scale-95 transition`}>
         <Menu size={20} />
       </button>
-
       <Sidebar theme={theme} open={showSidebar} onClose={() => setShowSidebar(false)} user={user} onLogin={() => { setShowSidebar(false); setShowAuth(true); }} />
-
       <div className="relative text-center mb-6 px-4">
         <div className={`w-11 h-11 mx-auto mb-3 rounded-xl bg-white border ${theme.softBorder} ${theme.accent} flex items-center justify-center shadow-sm`}>
           <ChefHat size={20} />
@@ -137,12 +139,10 @@ export default function App() {
         </div>
         {!user && <p className="text-[11px] text-stone-400 mt-2">Try any colour below 👇 — Login to save your Goal • Theme • Language • Kcal history</p>}
       </div>
-
       <IngredientPicker user={user} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} onRequireAuth={() => setShowAuth(true)} />
-
-      {/* AD - Under Ingredient Picker */}
       <AdSlot slot="1111111111" />
-
+      {/* FOOTER WITH REVIEW BOX - NEW */}
+      <Footer user={user} themeId={themeId} lang={lang} />
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜• © 2026 Didi • Cook what you have</p>
     </div>
