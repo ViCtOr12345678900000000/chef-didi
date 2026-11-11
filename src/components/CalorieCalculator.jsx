@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { Flame, Droplets, Scale, Camera, ImagePlus, Trash2, Sparkles, Eye, Plus, X, Calculator } from "lucide-react";
+import { Flame, Droplets, Scale, Camera, ImagePlus, Trash2, Sparkles, Eye, Plus, X, Calculator, Lock } from "lucide-react";
 import { GOALS, THEMES, caloriesFor, getStreak, getWeeklyKcal, getWater, setWater, getWeights, addWeight, dateStr, getPrefs } from "../lib/didi";
-export default function CalorieCalculator({ user, goal, themeId, lang, customCalories }) {
+
+const FREE_LIMIT = 3;
+const GUEST_KEY = "didi_guest_kcal_count";
+
+function getGuestCount() {
+  try { return parseInt(localStorage.getItem(GUEST_KEY) || "0", 10) || 0; } catch { return 0; }
+}
+
+export default function CalorieCalculator({ user, goal, themeId, lang, customCalories, onRequireAuth }) {
   const theme = THEMES[themeId] || THEMES.purple;
   const today = new Date().toISOString().slice(0, 10);
   const key = user?.email ? `didi_kcal_${user.email}_${today}` : `didi_kcal_guest_${today}`;
@@ -29,10 +37,33 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const left = target - totalEaten;
   const pct = Math.min(100, Math.round((totalEaten / target) * 100));
   const over = totalEaten > target;
-  // Re-compute on refreshTick so streak/week update after cloud restore
   const streak = getStreak(user);
   const weekly = getWeeklyKcal(user);
   const maxWeek = Math.max(...weekly.map(w => w.total), target);
+
+  // ---------- GUEST LIMIT: 3 FREE TRIES ----------
+  const [guestCount, setGuestCount] = useState(() => getGuestCount());
+  const isGuest = !user?.email;
+  const limitReached = isGuest && guestCount >= FREE_LIMIT;
+  const triesLeft = isGuest ? Math.max(0, FREE_LIMIT - guestCount) : null;
+
+  const useOneTry = () => {
+    if (!isGuest) return true;
+    const current = getGuestCount();
+    if (current >= FREE_LIMIT) {
+      setGuestCount(current);
+      return false;
+    }
+    const next = current + 1;
+    localStorage.setItem(GUEST_KEY, String(next));
+    setGuestCount(next);
+    return true;
+  };
+
+  const handleRequireAuth = () => {
+    if (onRequireAuth) onRequireAuth();
+    else setErr("You've used your 3 free tries — Login to continue unlimited.");
+  };
 
   // ---------- AUTO-SYNC TO CLOUD ----------
   const syncCloud = () => {
@@ -68,15 +99,14 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
     }, 800);
   };
 
-  // FIX: reload everything when user logs in / changes - this was the vanish bug
   useEffect(() => {
     try { setEaten(JSON.parse(localStorage.getItem(key) || "[]")); } catch { setEaten([]); }
     setWaterState(getWater(user));
     setWeights(getWeights(user));
     isFirstEatenSave.current = true;
+    if (!user?.email) setGuestCount(getGuestCount());
   }, [user?.email, key]);
 
-  // Save eaten + sync, but skip the very first save after a reload (it would overwrite cloud data with stale state)
   useEffect(() => {
     if (isFirstEatenSave.current) { isFirstEatenSave.current = false; return; }
     localStorage.setItem(key, JSON.stringify(eaten));
@@ -120,15 +150,19 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   };
 
   const handleCalc = async () => {
-    if (!text.trim()) return; setErr(""); setIsCalc(true); setAiNote(""); setAiSee("");
+    if (!text.trim()) return;
+    if (limitReached) { handleRequireAuth(); return; }
+    setErr(""); setIsCalc(true); setAiNote(""); setAiSee("");
     try {
       const res = await fetch("/api/calc-calories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, goal, customCalories: target }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || "Didi failed");
       const newItems = (data.items || []).map((it, i) => ({ id: Date.now() + i, name: it.name, qty: it.qty, unit: it.unit, kcal: it.kcalPerOne, totalKcal: it.totalKcal }));
       setEaten(prev => [...prev, ...newItems]); setAiNote(data.note || ""); setText("");
+      useOneTry();
     } catch (e) { setErr(e.message); } finally { setIsCalc(false); }
   };
   const startCamera = async () => {
+    if (limitReached) { handleRequireAuth(); return; }
     setShowCamera(true); setPhoto(null); setErr("");
     try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); streamRef.current = stream; setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100); }
     catch { setErr("Camera blocked. Use Upload Photo instead."); }
@@ -136,15 +170,21 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const stopCamera = () => { streamRef.current?.getTracks().forEach(t => t.stop()); setShowCamera(false); };
   const snapPhoto = () => { const video = videoRef.current; const canvas = canvasRef.current; if (!video || !canvas) return; canvas.width = video.videoWidth; canvas.height = video.videoHeight; canvas.getContext("2d").drawImage(video, 0, 0); setPhoto(canvas.toDataURL("image/jpeg", 0.85)); };
   const analyzePhoto = async () => {
-    if (!photo) return; setIsAnalyzing(true); setErr(""); setAiNote(""); setAiSee("");
+    if (!photo) return;
+    if (limitReached) { handleRequireAuth(); return; }
+    setIsAnalyzing(true); setErr(""); setAiNote(""); setAiSee("");
     try {
       const res = await fetch("/api/calc-calories-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: photo, goal, customCalories: target }) });
       const data = await res.json(); if (!res.ok) throw new Error(data.error || "Didi vision failed");
       const newItems = (data.items || []).map((it, i) => ({ id: Date.now() + i, name: it.name, qty: it.qty, unit: it.unit, kcal: it.kcalPerOne, totalKcal: it.totalKcal }));
       setEaten(prev => [...prev, ...newItems]); setAiNote(data.note || ""); setAiSee(data.whatYouSee || ""); stopCamera(); setPhoto(null);
+      useOneTry();
     } catch (e) { setErr(e.message); } finally { setIsAnalyzing(false); }
   };
-  const handleFile = (e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); };
+  const handleFile = (e) => {
+    if (limitReached) { handleRequireAuth(); return; }
+    const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f);
+  };
   return (
     <div className={`bg-white rounded-[28px] p-5 md:p-6 shadow-xl ${theme.shadow}`}>
       <button onClick={() => setShow(!show)} className="w-full flex items-center justify-between text-left">
@@ -153,6 +193,21 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
       </button>
       {show && (
         <div className="mt-4">
+          {/* GUEST TRIES BANNER */}
+          {isGuest && !limitReached && (
+            <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-3 flex items-center justify-between">
+              <p className="text-[12px] font-bold text-amber-800">🎁 {triesLeft} / 3 free tries left — test it out!</p>
+              <button onClick={handleRequireAuth} className="text-[11px] font-bold text-white bg-[#1A1A2E] px-3 py-1.5 rounded-full">Login for unlimited</button>
+            </div>
+          )}
+          {isGuest && limitReached && (
+            <div className="rounded-xl bg-[#1A1A2E] p-4 mb-3 text-center">
+              <p className="text-[13px] font-bold text-white flex items-center justify-center gap-1.5"><Lock size={14} /> You've used your 3 free tries</p>
+              <p className="text-[11px] text-white/70 mt-1">Login to keep calculating, save history & track kcal.</p>
+              <button onClick={handleRequireAuth} className="mt-3 h-10 px-5 bg-white text-black rounded-full text-[12px] font-bold">Login / Register →</button>
+            </div>
+          )}
+
           <div className={`${theme.softBg} rounded-2xl p-4 mb-3`}>
             <div className="flex justify-between text-[13px] font-bold"><span className="flex items-center gap-1.5"><Flame size={15} className="text-orange-500" /> Eaten: {totalEaten} kcal</span><span>{over ? `Over by ${Math.abs(left)}` : `${left} left`}</span></div>
             <div className="h-3 bg-white rounded-full mt-2 overflow-hidden"><div className={`h-full rounded-full transition-all ${over ? 'bg-red-500' : `bg-gradient-to-r ${theme.btn}`}`} style={{ width: `${pct}%` }} /></div>
@@ -178,12 +233,12 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
             </div>
           )}
           <div className="flex gap-2 mb-2">
-            <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCalc()} placeholder="e.g. 2 plates jollof + 1 grilled chicken + 1 Coke" className={`flex-1 min-w-0 h-12 px-4 ${theme.softBg} border ${theme.softBorder} rounded-full text-[14px] outline-none ${theme.focus}`} />
-            <button onClick={handleCalc} disabled={isCalc || !text.trim()} className={`shrink-0 h-12 px-5 bg-gradient-to-r ${theme.btn} text-white rounded-full text-[13px] font-bold shadow flex items-center gap-1.5`}><Sparkles size={14} />{isCalc ? 'Didi is thinking...' : 'Calculate'}</button>
+            <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCalc()} placeholder={limitReached ? "Login to continue..." : "e.g. 2 plates jollof + 1 grilled chicken + 1 Coke"} disabled={limitReached} className={`flex-1 min-w-0 h-12 px-4 ${theme.softBg} border ${theme.softBorder} rounded-full text-[14px] outline-none ${theme.focus} ${limitReached ? 'opacity-50' : ''}`} />
+            <button onClick={handleCalc} disabled={isCalc || !text.trim() || limitReached} className={`shrink-0 h-12 px-5 bg-gradient-to-r ${theme.btn} text-white rounded-full text-[13px] font-bold shadow flex items-center gap-1.5 ${limitReached ? 'opacity-50' : ''}`}><Sparkles size={14} />{isCalc ? 'Didi is thinking...' : limitReached ? 'Locked 🔒' : 'Calculate'}</button>
           </div>
           <div className="flex gap-2 mb-3 flex-wrap">
-            <button onClick={startCamera} className="h-10 px-4 bg-[#1A1A2E] text-white rounded-full text-[12px] font-bold flex items-center gap-1.5"><Camera size={14} /> Snap your food</button>
-            <button onClick={() => fileRef.current?.click()} className={`h-10 px-4 bg-white border ${theme.softBorder} rounded-full text-[12px] font-bold flex items-center gap-1.5`}><ImagePlus size={14} /> Upload Photo</button>
+            <button onClick={startCamera} disabled={limitReached} className={`h-10 px-4 bg-[#1A1A2E] text-white rounded-full text-[12px] font-bold flex items-center gap-1.5 ${limitReached ? 'opacity-50' : ''}`}><Camera size={14} /> Snap your food</button>
+            <button onClick={() => fileRef.current?.click()} disabled={limitReached} className={`h-10 px-4 bg-white border ${theme.softBorder} rounded-full text-[12px] font-bold flex items-center gap-1.5 ${limitReached ? 'opacity-50' : ''}`}><ImagePlus size={14} /> Upload Photo</button>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
             <button onClick={handleClearToday} className="h-10 px-4 bg-white border border-red-100 text-red-500 rounded-full text-[12px] font-bold flex items-center gap-1"><Trash2 size={13} /> Clear today</button>
           </div>
