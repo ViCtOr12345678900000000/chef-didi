@@ -57,71 +57,23 @@ export default function App() {
     }
   };
 
-  // ---------- BUILD BUNDLE FROM localStorage ----------
-  const buildBundle = (s) => {
-    const email = s.email.toLowerCase().trim();
-    const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
-    const found = users.find((u) => u.email === email);
-
-    const kcal = {};
-    const water = {};
-    for (let i = 0; i < 30; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const day = d.toISOString().slice(0, 10);
-      const v = localStorage.getItem(`didi_kcal_${email}_${day}`);
-      if (v) kcal[day] = JSON.parse(v);
-      const w = localStorage.getItem(`didi_water_${email}_${day}`);
-      if (w) water[day] = JSON.parse(w);
-    }
-
-    return {
-      email,
-      name: s.name || found?.name || "",
-      password: found?.password || "",
-      prefs: getPrefs(email),
-      fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
-      history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
-      shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
-      pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
-      weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
-      kcal,
-      water,
-      createdAt: new Date().toISOString(),
-      migrated: true,
-    };
-  };
-
-  // ---------- MIGRATE: login list + profile data (ALWAYS overwrites) ----------
-  const doMigrate = async (force = false) => {
+  // ---------- AUTO-MIGRATE ONCE: for login only ----------
+  const doMigrate = async () => {
     try {
       const s = getSession();
-      if (!s?.email) return { ok: false, reason: 'no session' };
-      if (!force && localStorage.getItem("didi-migrated")) return { ok: false, reason: 'already flagged' };
-
-      const bundle = buildBundle(s);
-      console.log("Pushing to Upstash:", bundle.email, "password found?", !!bundle.password, "kcal days:", Object.keys(bundle.kcal).length);
-
-      // 1) for login
+      if (!s?.email) return;
+      if (localStorage.getItem("didi-migrated")) return;
+      const email = s.email.toLowerCase().trim();
+      const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
+      const found = users.find((u) => u.email === email);
+      // Only push the account for login — data sync is now automatic in IngredientPicker / CalorieCalculator
       await fetch("/api/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ users: [bundle] }),
+        body: JSON.stringify({ users: [{ email, name: s.name || found?.name || "", password: found?.password || "", createdAt: new Date().toISOString(), migrated: true }] }),
       });
-
-      // 2) for data restore - always overwrites
-      const res = await fetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: bundle.email, data: bundle }),
-      });
-
-      if (!res.ok) return { ok: false, reason: 'api failed ' + res.status };
       localStorage.setItem("didi-migrated", "1");
-      return { ok: true, hasPassword: !!bundle.password };
-    } catch (e) {
-      return { ok: false, reason: String(e) };
-    }
+    } catch {}
   };
 
   // ---------- ON LOAD: restore session + cloud data ----------
@@ -129,7 +81,6 @@ export default function App() {
     const s = getSession();
     if (s) {
       setUser(s);
-      // Try to restore cloud data first, then apply prefs
       restoreFromCloud(s.email).then(() => {
         const p = getPrefs(s.email);
         setThemeId(p.theme || 'purple');
@@ -141,18 +92,8 @@ export default function App() {
 
   // AUTO MIGRATION on load
   useEffect(() => {
-    doMigrate(false);
+    doMigrate();
   }, []);
-
-  // FORCE SYNC BUTTON - for phone
-  const handleForceSync = async () => {
-    const result = await doMigrate(true);
-    if (result.ok) {
-      alert(`✅ Synced to Upstash! Password saved: ${result.hasPassword ? 'YES' : 'NO - SEE WARNING BELOW'}\n\nNow try login in Incognito.`);
-    } else {
-      alert(`❌ Sync failed: ${result.reason}`);
-    }
-  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash === '#my-number') return;
@@ -179,7 +120,6 @@ export default function App() {
     setThemeId(p.theme || 'purple');
     setLang(p.lang || 'en');
     window.dispatchEvent(new Event("didi-data-restored"));
-    setTimeout(() => doMigrate(true), 500);
   };
 
   const handleLogout = () => {
@@ -222,9 +162,6 @@ export default function App() {
               <span className={`text-[12px] font-bold ${theme.softBg} ${theme.accent} px-4 py-2 rounded-full`}>
                 👋 {t(lang, 'welcome')}, {user.name} • {prefs?.goal === 'weightloss' ? '⬇ Weight Loss' : prefs?.goal === 'weightgain' ? '⬆ Weight Gain' : prefs?.goal === 'fit' ? '🏋️ Fit' : '🍲 Normal'} • {prefs?.sittings || 3} sittings
               </span>
-              <button onClick={handleForceSync} className="text-[12px] font-bold bg-red-500 text-white px-4 py-2 rounded-full">
-                🔄 Sync to Cloud
-              </button>
               <button onClick={handleLogout} className={`text-[12px] font-bold bg-white border ${theme.softBorder} px-4 py-2 rounded-full ${theme.hover} hover:text-white transition`}>
                 {t(lang, 'logout')}
               </button>
