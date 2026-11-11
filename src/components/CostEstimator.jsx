@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getMarketPrices, saveMarketPrice, marketLocationFor } from "../lib/didi";
+import { marketLocationFor } from "../lib/didi";
 
 export default function CostEstimator({ recipe, location = "nigeria", themeId = "purple", user }) {
   const [community, setCommunity] = useState({ prices: {}, counts: {} });
@@ -11,10 +11,9 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
   const [reportSending, setReportSending] = useState(false);
 
   const marketLoc = marketLocationFor(location);
-  const local = getMarketPrices();
+  // REMOVED: getMarketPrices() localStorage fallback - Upstash only now
 
   const ingredients = recipe?.ingredients || [];
-  // recipe.ingredients can be ["Rice - 2 cups"] or [{name, qty}] - handle both
   const parsed = ingredients.map((raw) => {
     if (typeof raw === "string") {
       const parts = raw.split(" - ");
@@ -25,15 +24,9 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
 
   const priceFor = (name) => {
     const key = String(name).toLowerCase().trim();
-    // 1. Community price first (real market)
     if (community.prices[key]) return { price: community.prices[key], source: "community", count: community.counts[key] || 0 };
-    // 2. Local fallback
-    if (local[key]) return { price: local[key], source: "estimate", count: 0 };
-    // 3. Fuzzy match - e.g. "Palm Oil" vs "palm oil"
     const found = Object.keys(community.prices).find((k) => key.includes(k) || k.includes(key));
     if (found) return { price: community.prices[found], source: "community", count: community.counts[found] || 0 };
-    const foundLocal = Object.keys(local).find((k) => key.includes(k) || k.includes(key));
-    if (foundLocal) return { price: local[foundLocal], source: "estimate", count: 0 };
     return null;
   };
 
@@ -59,7 +52,8 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
       setReportMsg("Pick an ingredient + enter price");
       return;
     }
-    const p = parseInt(reportPrice);
+    // FIX: strip non-digits here, no pattern="" needed - this was the Safari error
+    const p = parseInt(String(reportPrice).replace(/[^0-9]/g, ""), 10);
     if (!p || p < 10) {
       setReportMsg("Enter a real price e.g. 2500");
       return;
@@ -74,12 +68,13 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
           location: marketLoc,
           item: reportItem.trim(),
           price: p,
+          email: user?.email || "guest",
         }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Failed");
-      // Save locally too so it shows instantly
-      saveMarketPrice(reportItem.trim(), p);
+      // UPSTASH ONLY: no saveMarketPrice() localStorage call anymore
+      // Update UI from Upstash response directly
       setCommunity((prev) => ({
         prices: { ...prev.prices, [reportItem.trim().toLowerCase()]: j.average || p },
         counts: { ...prev.counts, [reportItem.trim().toLowerCase()]: (prev.counts[reportItem.trim().toLowerCase()] || 0) + 1 },
@@ -120,9 +115,9 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
               <span className="flex items-center gap-1.5">
                 <span className="font-bold">₦{r.price.toLocaleString()}</span>
                 {r.source === "community" ? (
-                  <span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ {r.count} reports</span>
+                  <span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">✓ {r.count} reports</span>
                 ) : (
-                  <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">ESTIMATE</span>
+                  <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">ESTIMATE</span>
                 )}
               </span>
             ) : (
@@ -139,6 +134,7 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
 
       {!showReport ? (
         <button
+          type="button"
           onClick={() => {
             setShowReport(true);
             if (!reportItem && parsed[0]) setReportItem(parsed[0].name);
@@ -157,16 +153,17 @@ export default function CostEstimator({ recipe, location = "nigeria", themeId = 
             <option value="">Other ingredient...</option>
           </select>
           {!parsed.find((r) => r.name === reportItem) && (
-            <input value={reportItem} onChange={(e) => setReportItem(e.target.value)} placeholder="Type ingredient e.g. Rice" className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2" />
+            <input type="text" value={reportItem} onChange={(e) => setReportItem(e.target.value)} placeholder="Type ingredient e.g. Rice" className="w-full h-10 px-3 bg-white border rounded-full text-[12px] outline-none mb-2" />
           )}
           <div className="flex gap-2">
-            <input value={reportPrice} onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Price e.g. 2500" inputMode="numeric" className="flex-1 h-10 px-3 bg-white border rounded-full text-[12px] outline-none" />
-            <button onClick={handleReport} disabled={reportSending} className="h-10 px-4 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50">
+            {/* FIX: type="text" + inputMode numeric, NO pattern="" - pattern was causing Safari "string did not match" */}
+            <input type="text" inputMode="numeric" autoComplete="off" value={reportPrice} onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Price e.g. 2500" className="flex-1 min-w-0 h-10 px-3 bg-white border rounded-full text-[12px] outline-none" />
+            <button type="button" onClick={handleReport} disabled={reportSending} className="h-10 px-4 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50 shrink-0">
               {reportSending ? "Sending..." : "Send"}
             </button>
           </div>
           {reportMsg && <p className="text-[11px] mt-2 font-semibold">{reportMsg}</p>}
-          <button onClick={() => setShowReport(false)} className="text-[11px] text-stone-400 font-bold mt-2">Cancel</button>
+          <button type="button" onClick={() => setShowReport(false)} className="text-[11px] text-stone-400 font-bold mt-2">Cancel</button>
         </div>
       )}
     </div>
