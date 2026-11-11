@@ -3,8 +3,8 @@ import { ChefHat } from 'lucide-react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
 import MyNumber from './components/MyNumber';
-import Recommends from './components/Recommends';
 import Advertise from './components/Advertise';
+import Recommends from './components/Recommends';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
 export default function App() {
@@ -135,8 +135,8 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
-  // SECRET PAGE - Only opens with #advertise link. No link on homepage.
-  // Test link: https://chef-didi-9vo3.vercel.app/#advertise
+  // SECRET PAGE - Still hidden, only with #advertise link
+  // Test: https://chef-didi-9vo3.vercel.app/#advertise
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') {
     return <Advertise />;
   }
@@ -200,6 +200,7 @@ export default function App() {
       />
 
       <Recommends />
+
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
 
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">
