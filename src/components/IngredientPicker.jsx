@@ -39,7 +39,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     return false;
   };
 
-  // ---------- AUTO-SYNC TO CLOUD (debounced) ----------
   const syncCloud = () => {
     if (!user?.email) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
@@ -73,7 +72,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     }, 800);
   };
 
-  // LOCKED CUSTOM KCAL: guests cannot set it
   const handleCustomCalories = (val) => {
     if (isGuest) {
       onRequireAuth?.();
@@ -89,7 +87,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     localStorage.setItem("didi_guest_count", String(next));
   };
 
-  // ---------- SYNC LISTS + PREFS WHEN USER CHANGES OR CLOUD RESTORES ----------
   useEffect(() => {
     const sync = () => {
       setFavList(getFavourites(user));
@@ -201,14 +198,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-5"><SettingsBar goal={goal} setGoal={setGoal} sittings={sittings} setSittings={setSittings} themeId={themeId} setThemeId={setThemeId} lang={lang} setLang={setLang} user={user} customCalories={customCalories} setCustomCalories={handleCustomCalories} /></div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
-        {isGuest ? (
-          <div className="bg-white rounded-[24px] p-4 shadow-xl flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2"><Lock size={16} className={theme.accent} /><p className="text-[13px] font-bold">Kcal Calculator, Weight & Water are locked</p></div>
-            <button onClick={() => onRequireAuth?.()} className={`shrink-0 h-9 px-4 rounded-full bg-gradient-to-r ${theme.btn} text-white text-[12px] font-bold`}>Login to Unlock →</button>
-          </div>
-        ) : (
-          <CalorieCalculator key={cloudVersion} user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} />
-        )}
+        <CalorieCalculator key={cloudVersion} user={user} goal={goal} themeId={themeId} lang={lang} customCalories={customCalories} onRequireAuth={onRequireAuth} />
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
         <div className={`bg-white rounded-[28px] p-5 md:p-6 shadow-xl ${theme.shadow} h-full flex flex-col`}>
