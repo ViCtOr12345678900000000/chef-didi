@@ -81,7 +81,7 @@ export default function WorkWithUs({ theme, compact = false }) {
         <button type="submit" disabled={loading} className={`w-full text-white font-bold text-[15px] bg-gradient-to-r ${theme.btn} py-3.5 rounded-xl shadow-md hover:opacity-90 active:scale-[0.98] transition disabled:opacity-60`}>
           {loading ? 'Sending...' : 'Send To Chef Didi'}
         </button>
-        <p className="text-center text-[11px] text-stone-400">Private • No prices shown • Only Chef Didi sees this</p>
+        
       </form>
     </div>
   );
