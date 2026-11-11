@@ -10,6 +10,21 @@ function saveSession(session) {
   localStorage.setItem("didi_session", JSON.stringify(session));
 }
 
+const QUESTIONS = [
+  "What was the name of your first pet?",
+  "What city were you born in?",
+  "What is your favourite food?",
+  "What was your childhood nickname?",
+  "What is your mother's first name?",
+];
+
+// Hash answer in browser so we never send plain text
+async function hashAnswer(str) {
+  const clean = String(str || "").trim().toLowerCase();
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clean));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function syncToUpstash(user, isNew) {
   try {
     if (!isNew) return;
@@ -20,6 +35,8 @@ async function syncToUpstash(user, isNew) {
         email: user.email,
         name: user.name,
         password: user.password || "",
+        securityQuestion: user.securityQuestion || "",
+        securityAnswerHash: user.securityAnswerHash || "",
         prefs: {},
         fav: [],
         history: [],
@@ -56,9 +73,7 @@ async function loginUserLocalOrCloud(email, password) {
     const all = getUsers();
     all.push({ name: data.user.name, email: cleanEmail, password });
     saveUsers(all);
-    if (data.user.prefs) {
-      localStorage.setItem(`didi_prefs_${cleanEmail}`, JSON.stringify(data.user.prefs));
-    }
+    if (data.user.prefs) localStorage.setItem(`didi_prefs_${cleanEmail}`, JSON.stringify(data.user.prefs));
     if (data.user.fav) localStorage.setItem(`didi_fav_${cleanEmail}`, JSON.stringify(data.user.fav));
     if (data.user.history) localStorage.setItem(`didi_history_${cleanEmail}`, JSON.stringify(data.user.history));
     if (data.user.shopping) localStorage.setItem(`didi_shopping_${cleanEmail}`, JSON.stringify(data.user.shopping));
@@ -72,11 +87,11 @@ async function loginUserLocalOrCloud(email, password) {
   }
 }
 
-function registerUserLocal(name, email, password) {
+function registerUserLocal(name, email, password, secQ, secHash) {
   const users = getUsers();
   const cleanEmail = email.trim().toLowerCase();
   if (users.find(u => u.email === cleanEmail)) throw new Error("This email is already registered. Please login instead.");
-  const newUser = { name: name.trim(), email: cleanEmail, password };
+  const newUser = { name: name.trim(), email: cleanEmail, password, securityQuestion: secQ, securityAnswerHash: secHash };
   users.push(newUser);
   saveUsers(users);
   const session = { name: newUser.name, email: newUser.email };
@@ -89,57 +104,188 @@ export default function AuthModal({ onClose, onAuth }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [secQ, setSecQ] = useState(QUESTIONS[0]);
+  const [secA, setSecA] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Forgot flow: email -> question -> answer -> new password
+  const [mode, setMode] = useState("auth"); // auth | forgot-email | forgot-answer | forgot-new | setup-sec
+  const [forgotQ, setForgotQ] = useState("");
+  const [forgotA, setForgotA] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [setupQ, setSetupQ] = useState(QUESTIONS[0]);
+  const [setupA, setSetupA] = useState("");
+  const [pendingUser, setPendingUser] = useState(null);
+
+  const resetAll = () => { setErr(""); setMode("auth"); setForgotQ(""); setForgotA(""); setNewPass(""); setSetupA(""); };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErr("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     try {
       let user;
       if (isLogin) {
         user = await loginUserLocalOrCloud(email, password);
+        // Old user without security question? Ask them to set it once
+        try {
+          const r = await fetch(`/api/reset-password?action=has-question&email=${encodeURIComponent(user.email)}`);
+          const j = await r.json();
+          if (!j.hasQuestion) { setPendingUser(user); setMode("setup-sec"); return; }
+        } catch {}
       } else {
         if (!name.trim()) throw new Error("Please enter your name.");
         if (password.length < 4) throw new Error("Password must be at least 4 characters.");
-        const { session, newUser } = registerUserLocal(name, email, password);
+        if (!secA.trim()) throw new Error("Please answer your security question — you'll need it if you forget your password.");
+        const hash = await hashAnswer(secA);
+        const { session, newUser } = registerUserLocal(name, email, password, secQ, hash);
         syncToUpstash(newUser, true);
         user = session;
       }
       onAuth(user);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
   };
+
+  const handleSetupSec = async (e) => {
+    e.preventDefault(); setErr(""); setLoading(true);
+    try {
+      if (!setupA.trim()) throw new Error("Please enter an answer.");
+      const hash = await hashAnswer(setupA);
+      const res = await fetch("/api/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "set-question", email: pendingUser.email, question: setupQ, answerHash: hash }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || "Could not save. Try again.");
+      // Save locally too
+      const users = getUsers().map(u => u.email === pendingUser.email ? { ...u, securityQuestion: setupQ, securityAnswerHash: hash } : u);
+      saveUsers(users);
+      onAuth(pendingUser);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+
+  const handleForgotEmail = async (e) => {
+    e.preventDefault(); setErr(""); setLoading(true);
+    try {
+      const res = await fetch(`/api/reset-password?action=get-question&email=${encodeURIComponent(email.trim().toLowerCase())}`);
+      const j = await res.json();
+      if (!res.ok || !j.question) throw new Error(j.error || "No account with this email, or no security question set. Please create a new account.");
+      setForgotQ(j.question); setMode("forgot-answer");
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+
+  const handleForgotAnswer = async (e) => {
+    e.preventDefault(); setErr(""); setLoading(true);
+    try {
+      if (!forgotA.trim()) throw new Error("Please enter your answer.");
+      const hash = await hashAnswer(forgotA);
+      const res = await fetch("/api/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: email.trim().toLowerCase(), answerHash: hash }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || "Wrong answer. Try again.");
+      setMode("forgot-new");
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+
+  const handleForgotNew = async (e) => {
+    e.preventDefault(); setErr(""); setLoading(true);
+    try {
+      if (newPass.length < 4) throw new Error("Password must be at least 4 characters.");
+      const hash = await hashAnswer(forgotA);
+      const res = await fetch("/api/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reset", email: email.trim().toLowerCase(), answerHash: hash, newPassword: newPass }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || "Reset failed. Try again.");
+      // Update local copy too so login works instantly on this phone
+      const users = getUsers().map(u => u.email === email.trim().toLowerCase() ? { ...u, password: newPass } : u);
+      saveUsers(users);
+      const user = await loginUserLocalOrCloud(email, newPass);
+      onAuth(user);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+
+  const inputCls = "w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]";
+  const selectCls = "w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]";
+  const btnCls = "w-full h-12 bg-gradient-to-r from-[#4A2C8A] to-[#7B61FF] text-white rounded-full font-bold text-[14px] shadow disabled:opacity-60";
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-[28px] p-6 w-full max-w-[400px] shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-start">
-          <div>
-            <h2 className="text-[24px] font-bold text-[#1A1A2E]">{isLogin ? "Welcome back 👋" : "Join Chef Didi 👩🏾‍🍳"}</h2>
-            <p className="text-[13px] text-stone-400 mt-1">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to unlock Favourites, Shopping, Kcal & more"}</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button>
-        </div>
-        <form onSubmit={handleSubmit} className="mt-5 space-y-3">
-          {!isLogin && (
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name e.g. Ada" className="w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]" />
-          )}
-          <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="Email e.g. ada@gmail.com" className="w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]" />
-          <input value={password} onChange={e => setPassword(e.target.value)} type="password" required placeholder="Password" className="w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]" />
-          {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
-          <button type="submit" disabled={loading} className="w-full h-12 bg-gradient-to-r from-[#4A2C8A] to-[#7B61FF] text-white rounded-full font-bold text-[14px] shadow disabled:opacity-60">
-            {loading ? "Please wait..." : isLogin ? "Login →" : "Create Account →"}
-          </button>
-        </form>
-        <button onClick={() => { setIsLogin(!isLogin); setErr(""); }} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-4">
-          {isLogin ? "No account? Create one →" : "Already have account? Login →"}
-        </button>
-        {!isLogin && <p className="text-[11px] text-center text-stone-400 mt-3">🔒 Register once, unlock Favourites, Shopping, Pantry, Weight, Water & Kcal History</p>}
+      <div className="bg-white rounded-[28px] p-6 w-full max-w-[400px] shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {mode === "auth" && (
+          <>
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-[24px] font-bold text-[#1A1A2E]">{isLogin ? "Welcome back 👋" : "Join Chef Didi 👩🏾‍🍳"}</h2>
+                <p className="text-[13px] text-stone-400 mt-1">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to unlock Favourites, Shopping, Kcal & more"}</p>
+              </div>
+              <button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button>
+            </div>
+            <form onSubmit={handleSubmit} className="mt-5 space-y-3">
+              {!isLogin && <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name e.g. Ada" className={inputCls} />}
+              <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="Email e.g. ada@gmail.com" className={inputCls} />
+              <input value={password} onChange={e => setPassword(e.target.value)} type="password" required placeholder="Password" className={inputCls} />
+              {!isLogin && (
+                <div className="bg-[#FBFAFF] border border-[#EDEAFF] rounded-2xl p-3 space-y-2">
+                  <p className="text-[12px] font-bold text-[#4A2C8A]">🔐 Security question — for password recovery</p>
+                  <select value={secQ} onChange={e => setSecQ(e.target.value)} className={selectCls}>{QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}</select>
+                  <input value={secA} onChange={e => setSecA(e.target.value)} placeholder="Your answer e.g. Bingo" className={inputCls} />
+                  <p className="text-[11px] text-stone-400">Remember this answer. We will ask it if you forget your password.</p>
+                </div>
+              )}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              <button type="submit" disabled={loading} className={btnCls}>{loading ? "Please wait..." : isLogin ? "Login →" : "Create Account →"}</button>
+            </form>
+            {isLogin && <button onClick={() => { setMode("forgot-email"); setErr(""); }} className="w-full text-center text-[12px] font-bold text-stone-500 mt-3">Forgot password? Reset with security question →</button>}
+            <button onClick={() => { setIsLogin(!isLogin); setErr(""); }} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">{isLogin ? "No account? Create one →" : "Already have account? Login →"}</button>
+            {!isLogin && <p className="text-[11px] text-center text-stone-400 mt-3">🔒 Register once, unlock Favourites, Shopping, Pantry, Weight, Water & Kcal History</p>}
+          </>
+        )}
+
+        {mode === "setup-sec" && (
+          <>
+            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">One last step 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1">Set a security question so you can recover your password if you forget it. You only do this once.</p>
+            <form onSubmit={handleSetupSec} className="mt-4 space-y-3">
+              <select value={setupQ} onChange={e => setSetupQ(e.target.value)} className={selectCls}>{QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}</select>
+              <input value={setupA} onChange={e => setSetupA(e.target.value)} placeholder="Your answer" className={inputCls} />
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              <button type="submit" disabled={loading} className={btnCls}>{loading ? "Saving..." : "Save & Continue →"}</button>
+            </form>
+          </>
+        )}
+
+        {mode === "forgot-email" && (
+          <>
+            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Forgot password? 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1">Enter your email. We will show your security question.</p>
+            <form onSubmit={handleForgotEmail} className="mt-4 space-y-3">
+              <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="Email e.g. ada@gmail.com" className={inputCls} />
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              <button type="submit" disabled={loading} className={btnCls}>{loading ? "Checking..." : "Show my question →"}</button>
+            </form>
+            <button onClick={resetAll} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">← Back to login</button>
+          </>
+        )}
+
+        {mode === "forgot-answer" && (
+          <>
+            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Security question 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
+            <p className="text-[13px] font-bold text-[#4A2C8A] mt-3 bg-[#FBFAFF] border border-[#EDEAFF] rounded-2xl p-3">{forgotQ}</p>
+            <form onSubmit={handleForgotAnswer} className="mt-3 space-y-3">
+              <input value={forgotA} onChange={e => setForgotA(e.target.value)} placeholder="Your answer" className={inputCls} />
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              <button type="submit" disabled={loading} className={btnCls}>{loading ? "Checking..." : "Verify answer →"}</button>
+            </form>
+            <button onClick={resetAll} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">← Back to login</button>
+          </>
+        )}
+
+        {mode === "forgot-new" && (
+          <>
+            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Set new password ✅</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1">Answer correct. Choose a new password.</p>
+            <form onSubmit={handleForgotNew} className="mt-4 space-y-3">
+              <input value={newPass} onChange={e => setNewPass(e.target.value)} type="password" required placeholder="New password (min 4 chars)" className={inputCls} />
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              <button type="submit" disabled={loading} className={btnCls}>{loading ? "Saving..." : "Save new password & Login →"}</button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
