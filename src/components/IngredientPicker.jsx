@@ -310,9 +310,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           {!recipe && !isLoading && (<div className="bg-white rounded-[28px] p-6 shadow-xl"><div className={`${theme.softBg} border border-dashed ${theme.softBorder} rounded-2xl py-8 text-center`}><p className="text-[28px]">🍲</p><p className="text-[14px] font-semibold text-stone-600">Your recipe will appear here.</p><p className="text-[12px] text-stone-400">Pick ingredients → Choose goal → Find Meal</p></div></div>)}
         </div>
       </div>
-      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6">
-        <ZeroWasteMode user={user} onCookFromLeftovers={handleZeroWaste} />
-      </div>
+     
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
         <Quests user={user} location={location} themeId={themeId} />
       </div>
