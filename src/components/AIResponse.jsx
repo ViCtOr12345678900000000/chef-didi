@@ -3,7 +3,6 @@ import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 import { getDiasporaSwap } from "../lib/translator";
 import CostEstimator from "./CostEstimator";
-import VoiceCookingMode from "./VoiceCookingMode";
 import DiasporaTranslator from "./DiasporaTranslator";
 
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
@@ -17,7 +16,6 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addedShop, setAddedShop] = useState(false);
-  const [showVoice, setShowVoice] = useState(false);
   useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); setPaused({}); }, [recipe?.title, user?.email]);
   useEffect(() => {
     const t = setInterval(() => setTimers(prev => {
@@ -30,12 +28,22 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
   if (!recipe) return null;
   const g = GOALS[recipe.mode] || GOALS[goal] || GOALS.normal;
   const theme = THEMES[themeId] || THEMES.purple;
-  const cleanSteps = (recipe.steps || []).map(s => String(s).replace(/^Step\s*\d+\s*:\s*/i, "").trim());
+  // FIX: Surprise sometimes returns string / missing fields - normalise everything
+  const normList = (v) => {
+    if (!v) return [];
+    if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean);
+    if (typeof v === "string") return v.split(/\n|•|,/).map(x => String(x).trim()).filter(Boolean);
+    return [];
+  };
+  const normIngredients = normList(recipe.ingredients);
+  const cleanSteps = normList(recipe.steps || recipe.instructions).map(s => String(s).replace(/^Step\s*\d+\s*:\s*/i, "").trim());
+  const youHaveList = normList(recipe.youHave);
+  const youMightNeedList = normList(recipe.youMightNeed);
   const parseMins = (s) => { const m = s.match(/(\d+)\s*(hour|hr|min|mins|minutes)/i); if (!m) return null; return m[2].toLowerCase().startsWith("hour") ? parseInt(m[1]) * 60 : parseInt(m[1]); };
   const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
   const startTimer = (i) => { const mins = parseMins(cleanSteps[i]); if (mins) { setTimers(p => ({ ...p, [i]: mins * 60 })); setPaused(p => ({ ...p, [i]: false })); } };
   const togglePause = (i) => setPaused(p => ({ ...p, [i]: !p[i] }));
-  const allIngredients = (recipe.ingredients || []).map(x => swapped[x] || x);
+  const allIngredients = normIngredients.map(x => swapped[x] || x);
   const shareText = `🍲 ${recipe.title} - by Chef Didi\n⏱ ${recipe.time} • 🔥 ${recipe.caloriesPerSitting || recipe.calories}\n\nIngredients:\n${allIngredients.map(x => `• ${x}`).join("\n")}\n\nSteps:\n${cleanSteps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nMade with Chef Didi 💜`;
   const copyShare = async () => { try { await navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { } };
   return (
@@ -58,18 +66,23 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         <p className="text-[11px] text-white/90 mt-3">{g.emoji} {g.desc} • {sittings} sittings • {recipe.totalCalories || g.calories} kcal total</p>
       </div>
       {recipe.description && <p className="text-[13px] text-stone-600 leading-relaxed mb-4">{recipe.description}</p>}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-[#FBFAFF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">✓ You have</p>{(recipe.youHave || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
-        <div className="bg-[#F5F0FF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">You might need</p>{(recipe.youMightNeed || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
-      </div>
+      {(youHaveList.length > 0 || youMightNeedList.length > 0) && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-[#FBFAFF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">✓ You have</p>{youHaveList.length ? youHaveList.map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>) : <p className="text-[12px] text-stone-400">Surprise pick — Didi chose everything</p>}</div>
+          <div className="bg-[#F5F0FF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">You might need</p>{youMightNeedList.length ? youMightNeedList.map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>) : <p className="text-[12px] text-stone-400">Check ingredients below</p>}</div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2"><p className="font-bold text-[13px]">Ingredients</p><span className="text-[11px] text-stone-400">Tap 🔄 to swap</span></div>
+      {allIngredients.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4"><p className="text-[12px] font-bold text-amber-800">⚠️ This surprise recipe came back without ingredients — tap Generate Another to get a full one.</p></div>
+      )}
       <div className="mb-4 space-y-1">
         {allIngredients.map((x, i) => {
           const swap = getDiasporaSwap(x, location);
           return (
             <div key={i}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[12px] text-stone-600">• {x} {swapped[recipe.ingredients[i]] && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">swapped</span>}</p>
+                <p className="text-[12px] text-stone-600">• {x} {swapped[normIngredients[i]] && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">swapped</span>}</p>
                 <button onClick={() => setShowSwapFor(showSwapFor === i ? null : i)} className="text-[11px] font-bold text-stone-400 flex items-center gap-1"><RefreshCw size={11} /> Swap</button>
               </div>
               {swap && <p className="text-[11px] text-blue-600 ml-3">✈️ Abroad: Use <b>{swap}</b> instead</p>}
@@ -78,13 +91,16 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         })}
         {showSwapFor !== null && (
           <div className="flex flex-wrap gap-1.5 mt-1 p-2 bg-stone-50 rounded-xl">
-            {getSwaps(recipe.ingredients[showSwapFor]).map(s => (<button key={s} onClick={() => { setSwapped(p => ({ ...p, [recipe.ingredients[showSwapFor]]: s })); setShowSwapFor(null); }} className="text-[11px] font-bold bg-white border px-2.5 py-1 rounded-full">{s}</button>))}
+            {getSwaps(normIngredients[showSwapFor]).map(s => (<button key={s} onClick={() => { setSwapped(p => ({ ...p, [normIngredients[showSwapFor]]: s })); setShowSwapFor(null); }} className="text-[11px] font-bold bg-white border px-2.5 py-1 rounded-full">{s}</button>))}
           </div>
         )}
       </div>
       <CostEstimator recipe={{ ...recipe, ingredients: allIngredients }} location={location} themeId={themeId} user={user} />
       <DiasporaTranslator recipe={{ ...recipe, ingredients: allIngredients }} />
       <p className="font-bold text-[13px] mb-2 mt-4">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
+      {cleanSteps.length === 0 ? (
+        <div className="bg-stone-50 rounded-2xl p-4 mb-4 text-center"><p className="text-[13px] text-stone-500">No steps returned for this one. Tap <b>Generate Another</b> for a full recipe.</p></div>
+      ) : (
       <div className="space-y-3 mb-4">
         {cleanSteps.map((s, i) => {
           const mins = parseMins(s); const left = timers[i];
@@ -103,12 +119,11 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
           );
         })}
       </div>
+      )}
       <div className="bg-[#F5F0FF] rounded-2xl p-3.5 mb-4 flex gap-1.5"><Sparkles size={14} className="shrink-0 mt-0.5 text-[#7B61FF]" /><p className="text-[12px] text-stone-600"><b>Tip:</b> {recipe.tip}</p></div>
-      <button onClick={() => setShowVoice(true)} className="w-full h-11 mb-2 bg-purple-600 text-white rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold">🎙️ Cook With Me — Voice Mode (Hands-Free)</button>
-      {showVoice && <VoiceCookingMode recipe={{ ...recipe, steps: cleanSteps, ingredients: allIngredients }} onClose={() => setShowVoice(false)} />}
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button onClick={() => setCookMode(true)} className={`h-11 text-white rounded-full bg-gradient-to-r ${theme.btn} shadow-md flex items-center justify-center gap-1.5 text-[13px] font-bold`}><ChefHat size={15} /> Cook Mode</button>
-        <button onClick={() => { addToShopping(user, [...(recipe.youMightNeed || []), ...(recipe.ingredients || [])]); setAddedShop(true); setTimeout(() => setAddedShop(false), 2000); }} className="h-11 bg-white border rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold"><ShoppingCart size={15} /> {addedShop ? "Added ✓" : "Shopping List"}</button>
+        <button onClick={() => { addToShopping(user, [...youMightNeedList, ...normIngredients]); setAddedShop(true); setTimeout(() => setAddedShop(false), 2000); }} className="h-11 bg-white border rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold"><ShoppingCart size={15} /> {addedShop ? "Added ✓" : "Shopping List"}</button>
       </div>
       {onAddToKcal && <button onClick={onAddToKcal} className="w-full h-11 bg-[#1A1A2E] text-white rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold mb-2"><Flame size={15} /> Add this recipe to my Kcal today</button>}
       <div className="flex gap-2"><button onClick={onGenerateAnother} className={`flex-1 h-11 text-white rounded-full bg-gradient-to-r ${theme.btn} shadow-md text-[13px] font-bold`}>Generate Another</button><button onClick={onClear} className="flex-1 h-11 bg-white border rounded-full text-[13px] font-bold">Clear</button></div>
