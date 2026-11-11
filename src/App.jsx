@@ -3,6 +3,7 @@ import { ChefHat } from 'lucide-react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
 import MyNumber from './components/MyNumber';
+import Advertise from './components/Advertise';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
 export default function App() {
@@ -143,6 +144,11 @@ export default function App() {
   };
 
   const prefs = user?.email ? getPrefs(user.email) : null;
+
+  // SECRET PAGE - Only opens with #advertise link. No link on homepage.
+  if (typeof window !== 'undefined' && window.location.hash === '#advertise') {
+    return <Advertise />;
+  }
 
   if (typeof window !== 'undefined' && window.location.hash === '#my-number') {
     return <MyNumber />;
