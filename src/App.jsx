@@ -26,58 +26,94 @@ export default function App() {
     setThemeId(newTheme);
   };
 
-  useEffect(() => {
-    const s = getSession();
-    if (s) {
-      setUser(s);
-      const p = getPrefs(s.email);
-      setThemeId(p.theme || 'purple');
-      setLang(p.lang || 'en');
-    }
-  }, []);
+  // ---------- RESTORE CLOUD DATA INTO localStorage ----------
+  const restoreFromCloud = async (email) => {
+    try {
+      const clean = email.toLowerCase().trim();
+      const res = await fetch(`/api/profile?email=${encodeURIComponent(clean)}`);
+      const { data } = await res.json();
+      if (!data) return false;
 
-  // SHARED MIGRATION LOGIC - used by auto-migrate + Sync button
+      if (data.prefs) savePrefs(clean, data.prefs);
+      if (data.fav) localStorage.setItem(`didi_fav_${clean}`, JSON.stringify(data.fav));
+      if (data.history) localStorage.setItem(`didi_history_${clean}`, JSON.stringify(data.history));
+      if (data.shopping) localStorage.setItem(`didi_shopping_${clean}`, JSON.stringify(data.shopping));
+      if (data.pantry) localStorage.setItem(`didi_pantry_${clean}`, JSON.stringify(data.pantry));
+      if (data.weights) localStorage.setItem(`didi_weights_${clean}`, JSON.stringify(data.weights));
+
+      if (data.kcal) {
+        for (const [day, items] of Object.entries(data.kcal)) {
+          localStorage.setItem(`didi_kcal_${clean}_${day}`, JSON.stringify(items));
+        }
+      }
+      if (data.water) {
+        for (const [day, n] of Object.entries(data.water)) {
+          localStorage.setItem(`didi_water_${clean}_${day}`, JSON.stringify(n));
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // ---------- BUILD BUNDLE FROM localStorage ----------
+  const buildBundle = (s) => {
+    const email = s.email.toLowerCase().trim();
+    const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
+    const found = users.find((u) => u.email === email);
+
+    const kcal = {};
+    const water = {};
+    for (let i = 0; i < 30; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const day = d.toISOString().slice(0, 10);
+      const v = localStorage.getItem(`didi_kcal_${email}_${day}`);
+      if (v) kcal[day] = JSON.parse(v);
+      const w = localStorage.getItem(`didi_water_${email}_${day}`);
+      if (w) water[day] = JSON.parse(w);
+    }
+
+    return {
+      email,
+      name: s.name || found?.name || "",
+      password: found?.password || "",
+      prefs: getPrefs(email),
+      fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
+      history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
+      shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
+      pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
+      weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
+      kcal,
+      water,
+      createdAt: new Date().toISOString(),
+      migrated: true,
+    };
+  };
+
+  // ---------- MIGRATE: login list + profile data (ALWAYS overwrites) ----------
   const doMigrate = async (force = false) => {
     try {
       const s = getSession();
       if (!s?.email) return { ok: false, reason: 'no session' };
       if (!force && localStorage.getItem("didi-migrated")) return { ok: false, reason: 'already flagged' };
 
-      const email = s.email.toLowerCase();
-      const users = JSON.parse(localStorage.getItem("didi_users") || "[]");
-      const found = users.find((u) => u.email === email);
+      const bundle = buildBundle(s);
+      console.log("Pushing to Upstash:", bundle.email, "password found?", !!bundle.password, "kcal days:", Object.keys(bundle.kcal).length);
 
-      const kcal = {};
-      for (let i = 0; i < 30; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const day = d.toISOString().slice(0, 10);
-        const key = `didi_kcal_${email}_${day}`;
-        const val = localStorage.getItem(key);
-        if (val) kcal[day] = JSON.parse(val);
-      }
-
-      const bundle = {
-        email,
-        name: s.name || found?.name || "",
-        password: found?.password || "",
-        prefs: getPrefs(email),
-        fav: JSON.parse(localStorage.getItem(`didi_fav_${email}`) || "[]"),
-        history: JSON.parse(localStorage.getItem(`didi_history_${email}`) || "[]"),
-        shopping: JSON.parse(localStorage.getItem(`didi_shopping_${email}`) || "[]"),
-        pantry: JSON.parse(localStorage.getItem(`didi_pantry_${email}`) || "[]"),
-        weights: JSON.parse(localStorage.getItem(`didi_weights_${email}`) || "[]"),
-        kcal,
-        createdAt: new Date().toISOString(),
-        migrated: true,
-      };
-
-      console.log("Pushing to Upstash:", email, "password found?", !!bundle.password);
-
-      const res = await fetch("/api/migrate", {
+      // 1) for login
+      await fetch("/api/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ users: [bundle] }),
+      });
+
+      // 2) for data restore - always overwrites
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: bundle.email, data: bundle }),
       });
 
       if (!res.ok) return { ok: false, reason: 'api failed ' + res.status };
@@ -87,6 +123,21 @@ export default function App() {
       return { ok: false, reason: String(e) };
     }
   };
+
+  // ---------- ON LOAD: restore session + cloud data ----------
+  useEffect(() => {
+    const s = getSession();
+    if (s) {
+      setUser(s);
+      // Try to restore cloud data first, then apply prefs
+      restoreFromCloud(s.email).then(() => {
+        const p = getPrefs(s.email);
+        setThemeId(p.theme || 'purple');
+        setLang(p.lang || 'en');
+        window.dispatchEvent(new Event("didi-data-restored"));
+      });
+    }
+  }, []);
 
   // AUTO MIGRATION on load
   useEffect(() => {
@@ -115,16 +166,20 @@ export default function App() {
     if (user?.email) savePrefs(user.email, { theme: themeId, lang });
   }, [themeId, lang, user?.email]);
 
-  const handleAuth = (u) => {
+  // ---------- LOGIN: download cloud data FIRST ----------
+  const handleAuth = async (u) => {
     const session = { email: u.email, name: u.name };
     setUser(session);
     setShowAuth(false);
     localStorage.removeItem("didi_guest_count");
+
+    await restoreFromCloud(u.email);
+
     const p = getPrefs(u.email);
     setThemeId(p.theme || 'purple');
     setLang(p.lang || 'en');
-    // Try migrate right after login too
-    setTimeout(() => doMigrate(false), 500);
+    window.dispatchEvent(new Event("didi-data-restored"));
+    setTimeout(() => doMigrate(true), 500);
   };
 
   const handleLogout = () => {
