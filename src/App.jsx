@@ -139,7 +139,7 @@ export default function App() {
 
       <IngredientPicker user={user} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} onRequireAuth={() => setShowAuth(true)} />
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
-      <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜 in Lagos • © 2026 Didi • Cook what you have</p>
+      <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜• © 2026 Didi • Cook what you have</p>
     </div>
   );
 }
