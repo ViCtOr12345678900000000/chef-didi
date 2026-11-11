@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { QUESTS, getQuests, joinQuest, progressQuests } from "../lib/didi";
+import { QUESTS, getQuests, joinQuest } from "../lib/didi";
 
 export default function Quests({ user, location = "nigeria", themeId = "purple" }) {
   const [myQuests, setMyQuests] = useState(() => getQuests(user));
