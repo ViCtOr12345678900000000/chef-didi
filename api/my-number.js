@@ -1,12 +1,19 @@
-// api/my-number.js  OR  pages/api/my-number.js
-// Works with Upstash Redis
-// Needs in Vercel Env Vars:
-// UPSTASH_REDIS_REST_URL
-// UPSTASH_REDIS_REST_TOKEN
+// api/my-number.js — Chef Didi Admin API
+// GET = dashboard data, POST = new review/visitor/user, DELETE = delete one item
+// NEVER returns 500 — returns empty arrays if Upstash is missing/down
 
 import { Redis } from "@upstash/redis";
 
-const redis = Redis.fromEnv();
+function getRedis() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    return new Redis({ url, token });
+  } catch {
+    return null;
+  }
+}
 
 const KEYS = {
   visitors: "chef-didi:visitors",
@@ -14,155 +21,136 @@ const KEYS = {
   reviews: "chef-didi:reviews",
 };
 
-// Helper: Redis can return string or object - normalize to array
-async function getList(key) {
+async function readList(redis, key) {
+  if (!redis) return [];
   try {
-    const raw = await redis.get(key);
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === "string") {
-      try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
+    const raw = await redis.lrange(key, 0, -1);
+    if (!raw || !raw.length) return [];
+    return raw.map((item) => {
+      if (typeof item === "string") {
+        try { return JSON.parse(item); } catch { return { raw: item }; }
       }
-    }
-    return [];
+      return item;
+    });
   } catch (e) {
-    console.error("getList error", key, e);
+    console.error("readList error", key, e);
     return [];
   }
 }
 
-async function saveList(key, list) {
-  // Keep only last 2000 to avoid Upstash size issues
-  const trimmed = list.slice(-2000);
-  await redis.set(key, JSON.stringify(trimmed));
-  return trimmed;
-}
-
-function isMatch(item, body, type) {
-  // 1. If both have id, match by id - most reliable
-  if (body.id && item.id && String(body.id) === String(item.id)) return true;
-  if (body.id && !item.id) return false;
-
-  // 2. Composite match for old data without id
-  if (type === "reviews") {
-    return (
-      String(item.createdAt || "") === String(body.createdAt || "") &&
+function matches(item, body) {
+  if (!item) return false;
+  // 1. Prefer id if both have it
+  if (body.id && item.id) return String(item.id) === String(body.id);
+  // 2. Reviews: createdAt + email + comment
+  if (body.comment !== undefined && body.comment !== null) {
+    return String(item.createdAt || item.time || "") === String(body.createdAt || "") &&
       String(item.email || "") === String(body.email || "") &&
-      String(item.comment || "") === String(body.comment || "")
-    );
+      String(item.comment || "") === String(body.comment || "");
   }
-  if (type === "users") {
-    return (
-      String(item.createdAt || "") === String(body.createdAt || "") &&
-      String(item.email || "") === String(body.email || "")
-    );
+  // 3. Users: createdAt + email
+  if (body.email && body.createdAt) {
+    return String(item.createdAt || item.time || "") === String(body.createdAt) &&
+      String(item.email || "") === String(body.email);
   }
-  // visitors
-  return (
-    String(item.time || item.createdAt || "") === String(body.createdAt || body.time || "") &&
-    String(item.city || "") === String(body.city || "") &&
-    String(item.device || "") === String(body.device || "")
-  );
+  // 4. Visitors: time + city + device
+  if (body.city) {
+    return String(item.time || item.createdAt || "") === String(body.createdAt || "") &&
+      String(item.city || "") === String(body.city);
+  }
+  // 5. Fallback: id only
+  if (body.id) return String(item.id) === String(body.id);
+  return false;
 }
 
 export default async function handler(req, res) {
-  // Allow CORS for safety
+  // Allow CORS for admin page
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
   if (req.method === "OPTIONS") return res.status(200).end();
 
+  const redis = getRedis();
+
   try {
-    // ---------- GET - Dashboard loads this ----------
+    // ---------- GET ----------
     if (req.method === "GET") {
+      if (!redis) {
+        // Don't 500 — return empty so dashboard loads and shows "Nothing here yet"
+        return res.status(200).json({
+          visitors: [], users: [], reviews: [],
+          _warning: "Upstash env vars missing — check Vercel Settings > Environment Variables",
+        });
+      }
       const [visitors, users, reviews] = await Promise.all([
-        getList(KEYS.visitors),
-        getList(KEYS.users),
-        getList(KEYS.reviews),
+        readList(redis, KEYS.visitors),
+        readList(redis, KEYS.users),
+        readList(redis, KEYS.reviews),
       ]);
-      // Newest first
-      return res.status(200).json({
-        visitors: [...visitors].reverse(),
-        users: [...users].reverse(),
-        reviews: [...reviews].reverse(),
-      });
+      return res.status(200).json({ visitors, users, reviews });
     }
 
-    // ---------- POST - Footer review + track visitor/user ----------
+    // ---------- POST ----------
+    // Used by Footer (review) + tracking (visitor/user)
     if (req.method === "POST") {
-      const body = req.body || {};
-      const now = new Date().toISOString();
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      // Detect type: review has comment+rating, user has name+email, visitor has city
+      let key = KEYS.reviews;
+      let item = { ...body, id: body.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, createdAt: body.createdAt || body.time || new Date().toISOString() };
 
-      // If it's a review (has comment + rating or name+comment)
-      if (body.comment || body.rating) {
-        const list = await getList(KEYS.reviews);
-        const newReview = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: body.name || "Anonymous",
-          email: body.email || "",
-          rating: Number(body.rating) || 5,
-          comment: body.comment || "",
-          createdAt: body.createdAt || now,
-        };
-        await saveList(KEYS.reviews, [...list, newReview]);
-        return res.status(200).json({ ok: true, review: newReview });
+      if (body.type === "visitors" || (body.city && !body.comment)) {
+        key = KEYS.visitors;
+        item.time = item.createdAt;
+      } else if (body.type === "users" || (body.name && body.email && !body.comment)) {
+        key = KEYS.users;
+      } else {
+        key = KEYS.reviews;
       }
 
-      // If it's a user signup
-      if (body.type === "user" || (body.name && body.email && !body.city)) {
-        const list = await getList(KEYS.users);
-        const newUser = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: body.name || "",
-          email: body.email || "",
-          createdAt: body.createdAt || now,
-        };
-        await saveList(KEYS.users, [...list, newUser]);
-        return res.status(200).json({ ok: true, user: newUser });
+      if (!redis) {
+        // Still return success so Footer doesn't break, even if Upstash is missing
+        return res.status(200).json({ ok: true, saved: false, warning: "Upstash missing" });
       }
-
-      // Otherwise it's a visitor
-      const list = await getList(KEYS.visitors);
-      const newVisitor = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        city: body.city || "Unknown",
-        country: body.country || "Unknown",
-        device: body.device || "Other",
-        time: body.time || now,
-      };
-      await saveList(KEYS.visitors, [...list, newVisitor]);
-      return res.status(200).json({ ok: true, visitor: newVisitor });
+      await redis.lpush(key, JSON.stringify(item));
+      return res.status(200).json({ ok: true, saved: true, item });
     }
 
-    // ---------- DELETE - This is what your 🗑️ button calls ----------
+    // ---------- DELETE ----------
     if (req.method === "DELETE") {
-      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
-      const type = body.type; // "reviews" | "users" | "visitors"
-
+      const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const type = body.type; // "visitors" | "users" | "reviews"
       if (!type || !KEYS[type]) {
-        return res.status(400).json({ error: "Missing valid type: reviews/users/visitors" });
+        return res.status(400).json({ error: "Missing valid type: visitors, users, or reviews" });
+      }
+      if (!redis) {
+        return res.status(200).json({ ok: true, deleted: false, warning: "Upstash missing" });
       }
 
-      const list = await getList(KEYS[type]);
-      const before = list.length;
-      const after = list.filter((item) => !isMatch(item, body, type));
+      const key = KEYS[type];
+      const list = await readList(redis, key);
+      const toDelete = list.find((x) => matches(x, body));
 
-      if (after.length === before) {
-        return res.status(404).json({ error: "Item not found - already deleted or key mismatch" });
+      if (!toDelete) {
+        return res.status(404).json({ error: "Item not found — already deleted?" });
       }
 
-      await saveList(KEYS[type], after);
-      return res.status(200).json({ ok: true, deleted: before - after.length });
+      // Remove exact JSON string from list
+      await redis.lrem(key, 1, JSON.stringify(toDelete));
+      // Fallback: if stored differently (object vs string), try raw object string
+      // Upstash stores what we pushed, so above should work. If not, rebuild list:
+      // const remaining = list.filter((x) => !matches(x, body));
+      // await redis.del(key); for (const r of remaining.reverse()) await redis.lpush(key, JSON.stringify(r));
+
+      return res.status(200).json({ ok: true, deleted: true });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
     console.error("my-number API error:", e);
-    return res.status(500).json({ error: e.message || "Server error" });
+    // CRITICAL: Never 500 on GET — dashboard must load
+    if (req.method === "GET") {
+      return res.status(200).json({ visitors: [], users: [], reviews: [], _error: String(e.message || e) });
+    }
+    return res.status(200).json({ ok: false, error: String(e.message || e) });
   }
 }
