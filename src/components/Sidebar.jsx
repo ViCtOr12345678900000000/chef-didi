@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { X, Home, ChefHat, Briefcase, User, Sparkles } from 'lucide-react';
+import { X, Home, ChefHat, Briefcase, Sparkles } from 'lucide-react';
 import WorkWithUs from './WorkWithUs';
 
-export default function Sidebar({ theme, open, onClose, user, onLogin }) {
+export default function Sidebar({ theme, open, onClose, user }) {
   const [tab, setTab] = useState('home');
   if (!open) return null;
 
@@ -45,10 +45,7 @@ export default function Sidebar({ theme, open, onClose, user, onLogin }) {
                 <span className={`w-10 h-10 rounded-xl ${theme.softBg} ${theme.accent} flex items-center justify-center`}><Briefcase size={18} /></span>
                 <span><span className="block text-[14px] font-bold text-[#1A1A2E]">Work With Us</span><span className="block text-[12px] text-stone-500">Partner with Chef Didi • Book a slot</span></span>
               </button>
-              <button onClick={onLogin} className="w-full flex items-center gap-3 p-3.5 rounded-2xl hover:bg-stone-50 transition text-left">
-                <span className={`w-10 h-10 rounded-xl ${theme.softBg} ${theme.accent} flex items-center justify-center`}><User size={18} /></span>
-                <span><span className="block text-[14px] font-bold text-[#1A1A2E]">{user ? 'My Account' : 'Login / Register'}</span><span className="block text-[12px] text-stone-500">{user ? 'Saved recipes, kcal & goals' : 'Save your goals, theme & history'}</span></span>
-              </button>
+
               <div className={`mt-5 rounded-2xl border ${theme.softBorder} ${theme.softBg} p-4`}>
                 <p className={`text-[13px] font-bold flex items-center gap-1.5 ${theme.accent}`}><Sparkles size={14} /> Why Chef Didi?</p>
                 <p className="text-[12.5px] text-stone-600 leading-relaxed mt-2">Enter what you have. Didi gives you a recipe — no waste, no stress. Save favourites, track kcal, and cook in your language.</p>
@@ -58,7 +55,7 @@ export default function Sidebar({ theme, open, onClose, user, onLogin }) {
             <WorkWithUs theme={theme} compact />
           )}
         </div>
-        <div className="px-5 py-3 border-t border-stone-100 text-center text-[11px] text-stone-400">Made with 💜 in Lagos • © 2026 Didi</div>
+        <div className="px-5 py-3 border-t border-stone-100 text-center text-[11px] text-stone-400">Made with 💜 • © 2026 Didi</div>
       </div>
       <style>{`@keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }`}</style>
     </div>
