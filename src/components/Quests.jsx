@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
-import { QUESTS, getQuests, joinQuest } from "../lib/didi";
+import { QUESTS } from "../lib/didi";
 
 export default function Quests({ user, location = "nigeria", themeId = "purple" }) {
-  const [myQuests, setMyQuests] = useState(() => getQuests(user));
+  const [myQuests, setMyQuests] = useState([]);
   const [counts, setCounts] = useState({});
   const [showAll, setShowAll] = useState(false);
   const marketLoc = location === "abroad" ? "abroad" : "lagos";
+
+  // REMOVE Zero Waste Hero everywhere, even if user joined before
+  const filteredQuests = QUESTS.filter(q => q.id !== "zero_waste" && q.id !== "zero_waste_hero" && !q.title.toLowerCase().includes("zero waste"));
 
   const loadCounts = async () => {
     try {
@@ -15,56 +18,43 @@ export default function Quests({ user, location = "nigeria", themeId = "purple" 
     } catch {}
   };
 
-  // Restore my joined quests from Upstash on refresh - THIS WAS MISSING
+  // UPSTASH ONLY: load my joined quests from /api/profile (Upstash), no localStorage
   const restoreMyQuests = async () => {
-    if (!user?.email) return;
+    if (!user?.email) { setMyQuests([]); return; }
     try {
-      // 1. Try Upstash first
       const r = await fetch(`/api/profile?email=${encodeURIComponent(user.email)}`);
       const j = await r.json();
       const cloudQuests = j?.data?.quests || j?.quests || [];
-      if (cloudQuests.length) {
-        localStorage.setItem(`didi_quests_${user.email}`, JSON.stringify(cloudQuests));
-        setMyQuests(cloudQuests);
-        return;
-      }
-    } catch {}
-    // Fallback to localStorage
-    setMyQuests(getQuests(user));
+      // Filter out Zero Waste Hero from cloud too
+      setMyQuests(cloudQuests.filter(q => q.id !== "zero_waste" && q.id !== "zero_waste_hero"));
+    } catch { setMyQuests([]); }
   };
 
   useEffect(() => {
     loadCounts();
     restoreMyQuests();
-    const sync = () => { setMyQuests(getQuests(user)); loadCounts(); };
+    const sync = () => { restoreMyQuests(); loadCounts(); };
     window.addEventListener("didi-quests-updated", sync);
     return () => window.removeEventListener("didi-quests-updated", sync);
   }, [user?.email, marketLoc]);
 
   const handleJoin = async (id) => {
-    // 1. Save locally instantly so UI updates
-    const updated = joinQuest(user, id);
-    setMyQuests(updated);
-
-    // 2. Save to Upstash - THIS IS THE FIX, before it never uploaded
+    // Optimistic UI
+    const optimistic = [...myQuests, { id, progress: 0, completed: false }];
+    setMyQuests(optimistic);
+    // UPSTASH ONLY: no joinQuest() localStorage call
     try {
       await fetch("/api/community?type=quests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "join", questId: id, location: marketLoc, email: user?.email || "guest" }),
       });
-      // 3. Also save to profile bundle so restore works
-      if (user?.email) {
-        const email = user.email.toLowerCase().trim();
-        const existing = JSON.parse(localStorage.getItem(`didi_quests_${email}`) || "[]");
-        // syncCloud in IngredientPicker will pick this up, but force it now
-        window.dispatchEvent(new Event("didi-quests-updated"));
-      }
       loadCounts();
+      window.dispatchEvent(new Event("didi-quests-updated"));
     } catch {}
   };
 
-  const visible = showAll ? QUESTS : QUESTS.slice(0, 2);
+  const visible = showAll ? filteredQuests : filteredQuests.slice(0, 2);
 
   return (
     <div className="bg-white rounded-[24px] p-4 shadow-xl mt-4">
@@ -80,18 +70,17 @@ export default function Quests({ user, location = "nigeria", themeId = "purple" 
           return (
             <div key={q.id} className="border rounded-2xl p-3">
               <div className="flex justify-between items-start gap-2">
-                <div>
-                  <p className="text-[13px] font-bold">{q.title}</p>
-                  <p className="text-[11px] text-stone-500">{q.desc}</p>
-                  {/* FIXED TEXT: was "0 people completed in lagos" -> now just "X completed" */}
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold leading-snug">{q.title}</p>
+                  <p className="text-[11px] text-stone-500 leading-snug mt-0.5">{q.desc}</p>
                   <p className="text-[10px] text-stone-400 mt-1">🏅 {q.reward} • {counts[q.id] || 0} completed</p>
                 </div>
                 {!mine ? (
                   <button onClick={() => handleJoin(q.id)} className="shrink-0 h-8 px-3 bg-black text-white rounded-full text-[11px] font-bold">Join</button>
                 ) : mine.completed ? (
-                  <span className="shrink-0 text-[11px] font-bold bg-green-100 text-green-700 px-2.5 py-1.5 rounded-full">✓ Completed</span>
+                  <span className="shrink-0 text-[11px] font-bold bg-green-100 text-green-700 px-2.5 py-1.5 rounded-full whitespace-nowrap">✓ Completed</span>
                 ) : (
-                  <span className="shrink-0 text-[11px] font-bold bg-amber-100 text-amber-700 px-2.5 py-1.5 rounded-full">{mine.progress}/{mine.total}</span>
+                  <span className="shrink-0 text-[11px] font-bold bg-amber-100 text-amber-700 px-2.5 py-1.5 rounded-full whitespace-nowrap">{mine.progress}/{mine.total}</span>
                 )}
               </div>
               {mine && !mine.completed && (
