@@ -6,7 +6,6 @@ export default function Advertise() {
         <p className="text-center bg-[#ffeaa7] py-2 px-4 rounded-full text-[13px] font-bold mt-3">Introductory Launch Price — Limited Slots</p>
         <p className="text-center text-stone-500 mt-3">Your brand in front of real people who love to cook and eat.</p>
 
-        {/* BILLBOARD */}
         <div className="bg-white border-2 border-[#f0c27a] rounded-xl p-5 mt-5">
           <h2 className="font-bold text-[#c0392b]">1. Homepage Billboard</h2>
           <p className="text-[24px] font-bold my-2">₦50,000 / month</p>
@@ -14,7 +13,6 @@ export default function Advertise() {
           <p className="text-[14px] font-bold mt-2">Only 1 slot available.</p>
         </div>
 
-        {/* SPONSORED */}
         <div className="bg-white border-2 border-[#f0c27a] rounded-xl p-5 mt-4">
           <h2 className="font-bold text-[#c0392b]">2. Sponsored Recipe</h2>
           <p className="text-[24px] font-bold my-2">₦25,000 / recipe</p>
@@ -23,7 +21,6 @@ export default function Advertise() {
           <p className="text-[14px] font-bold mt-2">Stays on the site forever.</p>
         </div>
 
-        {/* RECOMMENDS */}
         <div className="bg-white border-2 border-[#f0c27a] rounded-xl p-5 mt-4">
           <h2 className="font-bold text-[#c0392b]">3. Chef Didi Recommends</h2>
           <p className="text-[24px] font-bold my-2">₦15,000 / month</p>
@@ -31,7 +28,6 @@ export default function Advertise() {
           <p className="text-[14px] font-bold mt-2">Only 4 slots available.</p>
         </div>
 
-        {/* FORM */}
         <h2 className="text-center font-bold text-xl mt-6">Book A Slot</h2>
         <p className="text-center text-[13px] text-stone-500">Fill this form. Only Chef Didi sees it.</p>
 
