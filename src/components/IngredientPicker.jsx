@@ -5,6 +5,7 @@ import Footer from "./Footer";
 import SettingsBar from "./SettingsBar";
 import CalorieCalculator from "./CalorieCalculator";
 import Quests from "./Quests";
+import ZeroWasteMode from "./ZeroWasteMode";
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, savePrefs, caloriesFor, getFavourites, getHistory, getShopping, toggleShopping, clearShopping, getPantry, savePantry, addHistory, progressQuests } from "../lib/didi";
 const GOAL_ICONS = { normal: <UtensilsCrossed size={15} />, weightloss: <TrendingDown size={16} />, weightgain: <TrendingUp size={16} />, fit: <Dumbbell size={16} /> };
 
@@ -40,14 +41,13 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     return false;
   };
 
-  // ---------- QUEST PROGRESS HELPER ----------
   const trackQuestProgress = (recipeTitle) => {
     if (!recipeTitle) return;
     try {
       const { newlyCompleted } = progressQuests(user, recipeTitle);
       if (newlyCompleted.length) {
         newlyCompleted.forEach(id => {
-          fetch("/api/quests", {
+          fetch("/api/community?type=quests", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ questId: id, location: location === "abroad" ? "abroad" : "lagos", email: user?.email || "guest" })
@@ -59,7 +59,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     } catch {}
   };
 
-  // ---------- AUTO-SYNC TO CLOUD (debounced) - INCLUDES marketPrices + quests ----------
   const syncCloud = () => {
     if (!user?.email) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
@@ -209,6 +208,14 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput(""); syncCloud();
   };
 
+  const handleZeroWaste = (leftoversText) => {
+    const items = leftoversText.split(",").map(s => s.trim()).filter(Boolean);
+    const cleaned = items.map(i => i.replace(/^(Leftover|Old|Cooked|Boiled)\s+/i, "").trim());
+    setIngPicker(cleaned);
+    setRecipe(null);
+    setTimeout(() => { document.getElementById("find-meal-btn")?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 200);
+  };
+
   return (
     <div className={`w-full bg-gradient-to-b ${theme.page} rounded-[32px] mx-auto max-w-[1400px] relative overflow-hidden`}>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[250px] bg-white/20 blur-[100px] rounded-full pointer-events-none" />
@@ -257,7 +264,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-2 mt-4">{t(lang, 'location')}</p>
           <div className={`grid grid-cols-2 gap-2 p-1.5 ${theme.softBg} border ${theme.softBorder} rounded-full mb-2`}>{Object.values(LOCATIONS).map(l => (<button key={l.id} onClick={() => setLocation(l.id)} className={`h-10 rounded-full text-[12px] font-bold transition ${location === l.id ? `bg-gradient-to-r ${theme.btn} text-white shadow-md` : 'text-stone-500'}`}>{l.emoji} {l.label}</button>))}</div>
           <p className="text-[12px] text-center text-stone-400 mb-4">{LOCATIONS[location]?.desc} • 🔥 {cal.perSitting} kcal × {sittings} = {cal.total} kcal {cal.isCustom ? '(Custom)' : ''}</p>
-          <button onClick={handleFindMeal} disabled={isLoading || !ingPicker.length} className={`w-full h-14 rounded-full font-medium text-[16px] flex items-center justify-center gap-2 transition ${!ingPicker.length || isLoading ? 'bg-stone-100 text-stone-400' : `bg-gradient-to-r ${theme.btn} text-white shadow-lg active:scale-[0.98]`}`}>{isLoading ? 'Finding your meal...' : <><Search size={18} /> {isGuest && guestCount >= 2 ? "Login to Continue 🔒" : `${t(lang, 'find')} ${GOALS[goal]?.emoji}`} </>}</button>
+          <button id="find-meal-btn" onClick={handleFindMeal} disabled={isLoading || !ingPicker.length} className={`w-full h-14 rounded-full font-medium text-[16px] flex items-center justify-center gap-2 transition ${!ingPicker.length || isLoading ? 'bg-stone-100 text-stone-400' : `bg-gradient-to-r ${theme.btn} text-white shadow-lg active:scale-[0.98]`}`}>{isLoading ? 'Finding your meal...' : <><Search size={18} /> {isGuest && guestCount >= 2 ? "Login to Continue 🔒" : `${t(lang, 'find')} ${GOALS[goal]?.emoji}`} </>}</button>
           {isGuest && <p className="text-[11px] text-center text-stone-400 mt-2">{Math.max(0, 2 - guestCount)} free recipes left. After that, login is free.</p>}
           <div className="flex justify-between mt-auto pt-4"><button onClick={() => setIngPicker([])} className={`text-[12px] font-semibold text-stone-400 ${theme.accent} flex gap-1 items-center`}><Delete size={14} /> Clear all</button><p className="text-[12px] font-semibold">{ingPicker.length === 0 ? 'Your basket is empty' : `${GOALS[goal]?.label} • ${cal.perSitting} kcal/sitting`}</p></div>
         </div>
@@ -268,8 +275,10 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           {!recipe && !isLoading && (<div className="bg-white rounded-[28px] p-6 shadow-xl"><div className={`${theme.softBg} border border-dashed ${theme.softBorder} rounded-2xl py-8 text-center`}><p className="text-[28px]">🍲</p><p className="text-[14px] font-semibold text-stone-600">Your recipe will appear here.</p><p className="text-[12px] text-stone-400">Pick ingredients → Choose goal → Find Meal</p></div></div>)}
         </div>
       </div>
-      {/* QUESTS - NEW */}
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6">
+        <ZeroWasteMode user={user} onCookFromLeftovers={handleZeroWaste} />
+      </div>
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
         <Quests user={user} location={location} themeId={themeId} />
       </div>
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-6 mt-4">
