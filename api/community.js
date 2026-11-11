@@ -12,22 +12,54 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const type = req.query.type || req.body?.type;
+
+  // ===== INTEGRATED: REVIEWS (from ReviewBox.jsx) =====
+  // ReviewBox does GET /api/community?type=reviews and POST same URL
+  // Before this, community.js returned 400 "unknown type" for reviews, so no review ever saved.
+  if (type === "reviews") {
+    try {
+      if (req.method === "GET") {
+        const list = await redis.lrange("reviews", 0, 99);
+        const reviews = (list || []).map((s) => {
+          try { return typeof s === "string" ? JSON.parse(s) : s; } catch { return { raw: s }; }
+        });
+        return res.status(200).json({ reviews });
+      }
+      if (req.method === "POST") {
+        const { name, rating, comment, email, createdAt } = req.body || {};
+        if (!comment || !String(comment).trim()) return res.status(400).json({ error: "comment required" });
+        const review = {
+          name: name || "Guest",
+          rating: rating || 5,
+          comment: String(comment).trim(),
+          email: email || "guest",
+          createdAt: createdAt || new Date().toISOString(),
+        };
+        await redis.lpush("reviews", JSON.stringify(review));
+        await redis.ltrim("reviews", 0, 999);
+        return res.status(200).json({ ok: true, review });
+      }
+      return res.status(405).json({ error: "method not allowed" });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ===== YOUR ORIGINAL QUESTS LOGIC - UNTOUCHED =====
   if (type !== "quests") return res.status(400).json({ error: "unknown type" });
 
   try {
-    // GET counts: /api/community?type=quests&location=lagos
     if (req.method === "GET") {
       const location = req.query.location || "lagos";
       const keys = await redis.keys(`didi:quest:*:${location}`);
       const counts = {};
       for (const k of keys) {
-        // key = didi:quest:JOLLOF_WEEK:lagos
         const parts = k.split(":");
         const questId = parts[2];
         const v = await redis.get(k);
         counts[questId] = Number(v) || 0;
       }
-      // Also get joined counts
       const joinKeys = await redis.keys(`didi:quest_join:*:${location}`);
       const joined = {};
       for (const k of joinKeys) {
@@ -38,16 +70,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ counts, joined });
     }
 
-    // POST: { action: "join" | "complete", questId, location, email }
     if (req.method === "POST") {
       const { action = "complete", questId, location = "lagos", email = "guest" } = req.body || {};
       if (!questId) return res.status(400).json({ error: "questId required" });
-
       if (action === "join") {
-        // 1. Increment join counter
         const joinKey = `didi:quest_join:${questId}:${location}`;
         const joinedTotal = await redis.incr(joinKey);
-        // 2. Save per-user join so refresh can restore it: didi:user_quests:email
         const userKey = `didi:user_quests:${email.toLowerCase()}`;
         const existing = (await redis.get(userKey)) || [];
         const arr = Array.isArray(existing) ? existing : [];
@@ -57,13 +85,10 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({ ok: true, joinedTotal });
       }
-
-      // complete
       const key = `didi:quest:${questId}:${location}`;
       const total = await redis.incr(key);
       return res.status(200).json({ ok: true, totalCompletions: total });
     }
-
     return res.status(405).json({ error: "method not allowed" });
   } catch (e) {
     console.error(e);
