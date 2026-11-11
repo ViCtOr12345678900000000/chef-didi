@@ -1,4 +1,4 @@
-// api/my-number.js
+// api/my-number.js - INTEGRATED: dashboard + reviews (no extra function)
 import { Redis } from "@upstash/redis";
 
 const redis = Redis.fromEnv();
@@ -19,11 +19,43 @@ function toArray(raw) {
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
+    // --- REVIEWS: POST - from Footer review box ---
+    if (req.method === "POST") {
+      const { name, email, rating, comment } = req.body || {};
+      if (!comment?.trim() || !name?.trim()) {
+        return res.status(400).json({ error: "Name + comment required" });
+      }
+      const review = {
+        id: Date.now().toString(),
+        name: name.trim().slice(0, 50),
+        email: (email || "").trim().slice(0, 100),
+        rating: Math.min(5, Math.max(1, Number(rating) || 5)),
+        comment: comment.trim().slice(0, 500),
+        createdAt: new Date().toISOString(),
+      };
+      await redis.lpush("didi:reviews", JSON.stringify(review));
+      return res.status(200).json({ ok: true, review });
+    }
+
+    // --- REVIEWS: DELETE - from MyNumber dashboard ---
+    if (req.method === "DELETE") {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: "Missing id" });
+      const all = await redis.lrange("didi:reviews", 0, -1);
+      const kept = all.filter((s) => {
+        try { return parseMaybeJSON(s)?.id !== String(id); } catch { return true; }
+      });
+      await redis.del("didi:reviews");
+      if (kept.length) await redis.rpush("didi:reviews", ...kept);
+      return res.status(200).json({ ok: true });
+    }
+
+    // --- DASHBOARD: GET - your original code, untouched ---
     // 1. VISITORS - try list first, then old counter format
     let visitors = [];
     try {
@@ -65,9 +97,9 @@ export default async function handler(req, res) {
     } catch {}
 
     return res.status(200).json({
-      visitors, // <-- ARRAY for MyNumber.jsx
-      users,    // <-- ARRAY for MyNumber.jsx
-      reviews,  // <-- ARRAY for MyNumber.jsx
+      visitors,
+      users,
+      reviews,
       totalUsers: users.length,
       totalVisits: visitors.length,
     });
