@@ -7,7 +7,7 @@ export default function SettingsBar({ goal, setGoal, sittings, setSittings, them
   const isGuest = !user?.email;
 
   const handleToggleCustom = () => {
-    // LOCK: guests cannot open Custom Kcal - this triggers login via locked setter in parent
+    // Custom Kcal stays locked for guests — this triggers login via locked setter in parent
     if (isGuest) {
       setCustomCalories(GOALS[goal]?.calories || 2000);
       return;
@@ -39,13 +39,14 @@ export default function SettingsBar({ goal, setGoal, sittings, setSittings, them
           </div>
         </div>
         <div>
-          <label className="text-[11px] font-bold tracking-wider text-stone-400 uppercase">Theme {isGuest && "🔒"}</label>
+          {/* UNLOCKED: everyone can test gradients, no login needed */}
+          <label className="text-[11px] font-bold tracking-wider text-stone-400 uppercase">Theme</label>
           <div className="flex gap-1.5 mt-2">
             {Object.entries(THEMES).map(([id, th]) => (
-              <button key={id} onClick={() => setThemeId(id)} title={isGuest ? "Login to change theme 🔒" : th.name} className={`w-9 h-9 rounded-full bg-gradient-to-br ${th.btn} ${themeId === id ? `ring-2 ring-offset-2 ${th.ring} scale-110` : 'opacity-70'}`} />
+              <button key={id} onClick={() => setThemeId(id)} title={th.name} className={`w-9 h-9 rounded-full bg-gradient-to-br ${th.btn} cursor-pointer transition hover:scale-110 active:scale-95 ${themeId === id ? `ring-2 ring-offset-2 ${th.ring} scale-110` : 'opacity-70 hover:opacity-100'}`} />
             ))}
           </div>
-          {isGuest && <p className="text-[10px] text-stone-400 mt-1">Login to change theme</p>}
+          <p className="text-[10px] text-stone-400 mt-1">Tap to try a colour</p>
         </div>
         <div>
           <label className="text-[11px] font-bold tracking-wider text-stone-400 uppercase">Language</label>
@@ -60,7 +61,7 @@ export default function SettingsBar({ goal, setGoal, sittings, setSittings, them
           <span className="text-[18px]">🔥</span>
           <div>
             <p className="text-[13px] font-bold text-[#1A1A2E]">Daily Calories: {customCalories ? `${customCalories} kcal (Custom)` : `${GOALS[goal]?.calories} kcal (from ${GOALS[goal]?.label})`}</p>
-            <p className="text-[11px] text-stone-400">Default comes from your Goal. Turn on Custom to change it. {isGuest && "• 🔒 Login to use Custom"}</p>
+            <p className="text-[11px] text-stone-400">Default comes from your Goal. Turn on Custom to change it. {isGuest && "• Login to use Custom"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -76,7 +77,7 @@ export default function SettingsBar({ goal, setGoal, sittings, setSittings, them
             </div>
           )}
           <button onClick={handleToggleCustom} className={`h-10 px-4 rounded-full text-[12px] font-bold whitespace-nowrap ${showCustom ? 'bg-[#1A1A2E] text-white' : `bg-gradient-to-r ${theme.btn} text-white shadow`}`}>
-            {showCustom ? 'Use Goal Default ↩' : isGuest ? 'Set Custom 🔒' : 'Set Custom ✏️'}
+            {showCustom ? 'Use Goal Default ↩' : isGuest ? 'Set Custom' : 'Set Custom ✏️'}
           </button>
         </div>
       </div>
