@@ -38,7 +38,7 @@ export default function WorkWithUs({ theme, compact = false }) {
   return (
     <div className={compact ? '' : 'max-w-[600px] mx-auto mt-8 px-4'}>
       {!compact && <div className="text-center mb-4"><h2 className="font-display text-[26px] font-semibold text-[#1A1A2E]">Book A Slot</h2><p className="text-stone-500 text-[14px]">Fill this form. Only Chef Didi sees it.</p></div>}
-      {compact && <div className="mb-3"><h3 className="font-display text-[19px] font-semibold text-[#1A1A2E]">Book A Slot</h3><p className="text-stone-500 text-[12.5px]">For brands & partners. No prices here — Didi will send you options.</p></div>}
+      {compact && <div className="mb-3"><h3 className="font-display text-[19px] font-semibold text-[#1A1A2E]">Book A Slot</h3><p className="text-stone-500 text-[12.5px]">For brands & partners.</p></div>}
 
       <form onSubmit={handleSend} className={`${theme.softBg} border ${theme.softBorder} rounded-2xl p-4 space-y-3 shadow-sm`}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" className={inputClass} />
