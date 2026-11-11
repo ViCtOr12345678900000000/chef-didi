@@ -199,6 +199,7 @@ export default function App() {
         onRequireAuth={() => setShowAuth(true)} 
       />
 
+      <Recommends />
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
 
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">
