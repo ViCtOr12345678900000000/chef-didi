@@ -1,6 +1,21 @@
 import { useEffect, useState, useMemo } from "react";
-
 const PAGE_SIZE = 20;
+
+// Merge duplicates: NG = Nigeria, US = United States
+function normalizeCountry(c) {
+  const s = String(c || "Unknown").trim();
+  const map = { NG: "Nigeria", Nigeria: "Nigeria", US: "United States", USA: "United States", "United States": "United States", GB: "United Kingdom", UK: "United Kingdom" };
+  return map[s] || map[s.toUpperCase()] || s;
+}
+
+// Old bot entries: datacentre city + generic device, or no real city
+function isOldBot(v) {
+  const city = String(v.city || "").toLowerCase();
+  const datacenters = ["san jose", "ashburn", "boardman", "dulles", "prineville", "hillsboro", "quincy", "the dalles", "council bluffs", "moncks corner"];
+  if (datacenters.some(d => city.includes(d))) return true;
+  if (city === "unknown" && v.device === "Other") return true;
+  return false;
+}
 
 export default function MyNumber() {
   const [data, setData] = useState(null);
@@ -9,30 +24,25 @@ export default function MyNumber() {
   const [countryFilter, setCountryFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [showBots, setShowBots] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    try {
-      const res = await fetch("/api/my-number");
-      const json = await res.json();
-      setData(json);
-    } catch {}
+    try { const res = await fetch("/api/my-number"); const json = await res.json(); setData(json); } catch {}
     setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
-  useEffect(() => { setPage(1); }, [tab, search, countryFilter]);
+  useEffect(() => { setPage(1); }, [tab, search, countryFilter, showBots]);
 
-  const visitors = data?.visitors || [];
+  const allVisitors = (data?.visitors || []).map(v => ({ ...v, country: normalizeCountry(v.country) }));
   const users = data?.users || [];
+  // By default hide old bots. Toggle to see them if you want to audit.
+  const visitors = showBots ? allVisitors : allVisitors.filter(v => !isOldBot(v));
+  const hiddenBotCount = allVisitors.length - visitors.length;
 
-  // Country counts — this is your "how far has Didi reached" view
   const countries = useMemo(() => {
     const map = {};
-    visitors.forEach(v => {
-      const k = v.country || "Unknown";
-      map[k] = (map[k] || 0) + 1;
-    });
+    visitors.forEach(v => { const k = v.country || "Unknown"; map[k] = (map[k] || 0) + 1; });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [visitors]);
 
@@ -55,9 +65,7 @@ export default function MyNumber() {
   const safePage = Math.min(page, totalPages);
   const pageItems = list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  if (loading || !data) return (
-    <div style={{ background: "#0F0F10", color: "white", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui" }}>Loading dashboard...</div>
-  );
+  if (loading || !data) return <div style={{ background: "#0F0F10", color: "white", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui" }}>Loading dashboard...</div>;
 
   const card = { background: "#1A1A1C", border: "1px solid #262628", borderRadius: "16px", padding: "16px" };
   const chip = (active) => ({ padding: "8px 14px", borderRadius: "999px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700, background: active ? "white" : "#1A1A1C", color: active ? "black" : "#ccc" });
@@ -71,17 +79,17 @@ export default function MyNumber() {
           <button onClick={load} style={{ background: "white", color: "black", padding: "9px 16px", borderRadius: "999px", border: "none", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}>↻ Refresh</button>
         </div>
       </div>
-
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "20px" }}>
-        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
-          <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>TOTAL VISITS (REAL PEOPLE)</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0" }}>{visitors.length}</p><p style={{ fontSize: "11px", color: "#666", margin: 0 }}>Bots already filtered out</p></div>
+          <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>REAL VISITS</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0" }}>{visitors.length}</p><p style={{ fontSize: "11px", color: "#666", margin: 0 }}>{hiddenBotCount} old bot entries hidden</p></div>
           <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>COUNTRIES REACHED</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0", color: "#4ADE80" }}>{countries.length}</p></div>
           <div style={card}><p style={{ color: "#888", fontSize: "11px", margin: 0 }}>REGISTERED USERS</p><p style={{ fontSize: "32px", fontWeight: 300, margin: "6px 0 0", color: "#A78BFA" }}>{users.length}</p></div>
         </div>
 
-        {/* 🌍 COUNTRY FILTER — how far has Didi reached? */}
-        <h3 style={{ fontSize: "13px", margin: "20px 0 10px", color: "#aaa" }}>🌍 Filter by country — see how far Didi has reached</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "16px 0 8px" }}>
+          <h3 style={{ fontSize: "13px", margin: 0, color: "#aaa" }}>🌍 Filter by country — how far Didi has reached</h3>
+          <button onClick={() => setShowBots(!showBots)} style={{ marginLeft: "auto", background: "#1A1A1C", color: "#888", border: "1px solid #2A2A2E", borderRadius: "999px", padding: "6px 12px", fontSize: "11px", cursor: "pointer" }}>{showBots ? "Hide bots" : `Show ${hiddenBotCount} hidden bots`}</button>
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
           <button onClick={() => setCountryFilter("all")} style={{ background: countryFilter === "all" ? "white" : "#1A1A1C", color: countryFilter === "all" ? "black" : "white", border: "1px solid #262628", borderRadius: "999px", padding: "8px 14px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>All • {visitors.length}</button>
           {countries.map(([c, n]) => (
@@ -93,7 +101,6 @@ export default function MyNumber() {
           <button onClick={() => setTab("visitors")} style={chip(tab === "visitors")}>Visitors {countryFilter !== "all" ? `in ${countryFilter} ` : ""}({filteredVisitors.length})</button>
           <button onClick={() => setTab("users")} style={chip(tab === "users")}>Users ({filteredUsers.length})</button>
         </div>
-
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "visitors" ? "Search city, country, device..." : "Search name or email..."} style={inputStyle} />
           {tab === "visitors" && (
@@ -103,7 +110,6 @@ export default function MyNumber() {
             </select>
           )}
         </div>
-
         <div style={{ background: "#141415", border: "1px solid #222", borderRadius: "16px", overflow: "hidden" }}>
           {pageItems.length === 0 && <p style={{ padding: "20px", color: "#777", textAlign: "center", fontSize: "13px" }}>Nothing in {countryFilter} yet.</p>}
           {tab === "visitors" && pageItems.map((v, i) => (
@@ -119,7 +125,6 @@ export default function MyNumber() {
             </div>
           ))}
         </div>
-
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
           <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} style={{ background: "#1A1A1C", color: "white", border: "1px solid #2A2A2E", padding: "9px 16px", borderRadius: "999px", opacity: safePage <= 1 ? 0.4 : 1, cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>← Prev</button>
           <p style={{ fontSize: "12px", color: "#888", margin: 0 }}>Page {safePage} of {totalPages} • {list.length} shown {countryFilter !== "all" ? `in ${countryFilter}` : ""}</p>
