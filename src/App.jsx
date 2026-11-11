@@ -5,6 +5,7 @@ import AuthModal from './components/AuthModal';
 import MyNumber from './components/MyNumber';
 import Advertise from './components/Advertise';
 import Sidebar from './components/Sidebar';
+import AdSlot from './components/AdSlot';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
 export default function App() {
@@ -138,6 +139,10 @@ export default function App() {
       </div>
 
       <IngredientPicker user={user} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} onRequireAuth={() => setShowAuth(true)} />
+
+      {/* AD - Under Ingredient Picker */}
+      <AdSlot slot="1111111111" />
+
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜• © 2026 Didi • Cook what you have</p>
     </div>
