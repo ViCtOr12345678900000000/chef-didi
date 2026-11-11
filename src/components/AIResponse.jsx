@@ -3,6 +3,8 @@ import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 import { getDiasporaSwap } from "../lib/translator";
 import CostEstimator from "./CostEstimator";
+import VoiceCookingMode from "./VoiceCookingMode";
+import DiasporaTranslator from "./DiasporaTranslator";
 
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
   const [fav, setFav] = useState(false);
@@ -15,6 +17,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addedShop, setAddedShop] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
   useEffect(() => { setFav(isFavourite(user, recipe?.title)); setStepIdx(0); setSwapped({}); setAddedShop(false); setPaused({}); }, [recipe?.title, user?.email]);
   useEffect(() => {
     const t = setInterval(() => setTimers(prev => {
@@ -59,8 +62,6 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         <div className="bg-[#FBFAFF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">✓ You have</p>{(recipe.youHave || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
         <div className="bg-[#F5F0FF] border rounded-2xl p-3"><p className="font-bold text-[13px] mb-1">You might need</p>{(recipe.youMightNeed || []).map(x => <p key={x} className="text-[12px] text-stone-600">• {x}</p>)}</div>
       </div>
-
-      {/* TRANSLATOR + COST ESTIMATOR */}
       <div className="flex items-center justify-between mb-2"><p className="font-bold text-[13px]">Ingredients</p><span className="text-[11px] text-stone-400">Tap 🔄 to swap</span></div>
       <div className="mb-4 space-y-1">
         {allIngredients.map((x, i) => {
@@ -81,10 +82,9 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
           </div>
         )}
       </div>
-
-      <CostEstimator ingredients={allIngredients} location={location} sittings={sittings} user={user} />
-
-      <p className="font-bold text-[13px] mb-2">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
+      <CostEstimator recipe={{ ...recipe, ingredients: allIngredients }} location={location} themeId={themeId} user={user} />
+      <DiasporaTranslator recipe={{ ...recipe, ingredients: allIngredients }} />
+      <p className="font-bold text-[13px] mb-2 mt-4">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
       <div className="space-y-3 mb-4">
         {cleanSteps.map((s, i) => {
           const mins = parseMins(s); const left = timers[i];
@@ -104,6 +104,8 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         })}
       </div>
       <div className="bg-[#F5F0FF] rounded-2xl p-3.5 mb-4 flex gap-1.5"><Sparkles size={14} className="shrink-0 mt-0.5 text-[#7B61FF]" /><p className="text-[12px] text-stone-600"><b>Tip:</b> {recipe.tip}</p></div>
+      <button onClick={() => setShowVoice(true)} className="w-full h-11 mb-2 bg-purple-600 text-white rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold">🎙️ Cook With Me — Voice Mode (Hands-Free)</button>
+      {showVoice && <VoiceCookingMode recipe={{ ...recipe, steps: cleanSteps, ingredients: allIngredients }} onClose={() => setShowVoice(false)} />}
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button onClick={() => setCookMode(true)} className={`h-11 text-white rounded-full bg-gradient-to-r ${theme.btn} shadow-md flex items-center justify-center gap-1.5 text-[13px] font-bold`}><ChefHat size={15} /> Cook Mode</button>
         <button onClick={() => { addToShopping(user, [...(recipe.youMightNeed || []), ...(recipe.ingredients || [])]); setAddedShop(true); setTimeout(() => setAddedShop(false), 2000); }} className="h-11 bg-white border rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold"><ShoppingCart size={15} /> {addedShop ? "Added ✓" : "Shopping List"}</button>
