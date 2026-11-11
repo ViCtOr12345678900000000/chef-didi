@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Home, ChefHat, Briefcase, Sparkles } from 'lucide-react';
 import WorkWithUs from './WorkWithUs';
+import AdSlot from './AdSlot';
 
 export default function Sidebar({ theme, open, onClose, user }) {
   const [tab, setTab] = useState('home');
@@ -50,6 +51,9 @@ export default function Sidebar({ theme, open, onClose, user }) {
                 <p className={`text-[13px] font-bold flex items-center gap-1.5 ${theme.accent}`}><Sparkles size={14} /> Why Chef Didi?</p>
                 <p className="text-[12.5px] text-stone-600 leading-relaxed mt-2">Enter what you have. Didi gives you a recipe — no waste, no stress. Save favourites, track kcal, and cook in your language.</p>
               </div>
+
+              {/* AD - In Sidebar Menu */}
+              <AdSlot slot="2222222222" />
             </div>
           ) : (
             <WorkWithUs theme={theme} compact />
