@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChefHat, Menu } from 'lucide-react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
-import MyNumber from './components/MyNumber';
+import AdminDashboard from './components/AdminDashboard';
 import Advertise from './components/Advertise';
 import Sidebar from './components/Sidebar';
 import AdSlot from './components/AdSlot';
@@ -33,7 +33,6 @@ export default function App() {
       if (data.shopping) localStorage.setItem(`didi_shopping_${clean}`, JSON.stringify(data.shopping));
       if (data.pantry) localStorage.setItem(`didi_pantry_${clean}`, JSON.stringify(data.pantry));
       if (data.weights) localStorage.setItem(`didi_weights_${clean}`, JSON.stringify(data.weights));
-      // Zero Waste Hero filtered out on restore
       if (data.quests) {
         const filtered = data.quests.filter(q => q.id !== "zero-waste-3" && q.id !== "zero_waste" && q.id !== "zero_waste_hero" && !String(q.id).toLowerCase().includes("zero"));
         localStorage.setItem(`didi_quests_${clean}`, JSON.stringify(filtered));
@@ -110,8 +109,9 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
+  // Secret Hidden Routes
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') return <Advertise />;
-  if (typeof window !== 'undefined' && window.location.hash === '#my-number') return <MyNumber />;
+  if (typeof window !== 'undefined' && window.location.hash === '#my-number') return <AdminDashboard />;
 
   return (
     <div className="min-h-screen bg-white w-[100vw] py-8 relative">
@@ -141,7 +141,6 @@ export default function App() {
       </div>
       <IngredientPicker user={user} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} onRequireAuth={() => setShowAuth(true)} />
       <AdSlot slot="1111111111" />
-      {/* FOOTER WITH REVIEW BOX - NEW */}
       <Footer user={user} themeId={themeId} lang={lang} />
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜• © 2026 Didi • Cook what you have</p>
