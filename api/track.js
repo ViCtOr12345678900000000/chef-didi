@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     if (!url || !token) {
       return res.status(200).json({ ok: false, error: "missing-upstash-env" });
     }
-    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const headers = { Authorization: `Bearer ${token}` };
 
     const cookieHeader = String(req.headers.cookie || "");
     const cookieMatch = cookieHeader.match(/(?:^|;\s*)vid=(v_[a-f0-9]{10})/);
@@ -57,21 +57,21 @@ export default async function handler(req, res) {
       time: new Date().toISOString(),
     };
 
-    const pipeRes = await fetch(`${url}/pipeline`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify([
-        ["INCR", "count"],
-        ["RPUSH", "visitors", JSON.stringify(entry)],
-        ["LTRIM", "visitors", "-1000", "-1"],
-      ]),
-    });
-    const pipeData = await pipeRes.json();
-    if (pipeData.error || !pipeRes.ok) {
-      return res.status(200).json({ ok: false, error: pipeData.error || "pipeline-failed" });
+    // SAME method as my-number.js — no pipeline
+    const pushRes = await fetch(`${url}/rpush/visitors/${encodeURIComponent(JSON.stringify(entry))}`, { headers });
+    const pushData = await pushRes.json();
+    if (pushData.error) {
+      return res.status(200).json({ ok: false, error: "rpush-failed: " + pushData.error });
     }
 
-    return res.status(200).json({ ok: true, saved: true, visitNumber });
+    // Keep only last 1000
+    await fetch(`${url}/ltrim/visitors/-1000/-1`, { headers }).catch(() => {});
+
+    // Verify it actually landed — return real list length
+    const lenRes = await fetch(`${url}/llen/visitors`, { headers });
+    const lenData = await lenRes.json();
+
+    return res.status(200).json({ ok: true, saved: true, visitNumber, listLength: lenData.result });
   } catch (e) {
     return res.status(200).json({ ok: false, error: String(e.message || e) });
   }
