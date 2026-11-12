@@ -101,6 +101,8 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
       <div className={`text-white rounded-2xl p-4 mb-4 bg-gradient-to-br ${theme.btn}`}>
         <div className="flex justify-between gap-2 mb-2"><p className="text-[10px] font-bold tracking-[0.15em] text-white/85">YOUR ONE RECIPE</p><span className="text-[10px] font-bold bg-white text-[#1A1A2E] px-2.5 py-1 rounded-full">{g.emoji} {g.label.toUpperCase()}</span></div>
         <h3 className="font-display font-light text-[22px] leading-tight mb-3">{recipe.title}</h3>
+        {recipe.leftoverUsed && <span className="inline-block mb-2 text-[11px] font-bold bg-green-100 text-green-800 px-2.5 py-1 rounded-full">♻️ Made from your leftovers</span>}
+        {recipe.isPlan && <span className="inline-block mb-2 ml-1 text-[11px] font-bold bg-white/20 px-2.5 py-1 rounded-full">📅 {recipe.day || "Meal Plan"}{recipe.reuseFrom ? ` • Reuses: ${recipe.reuseFrom}` : ""}</span>}
         <div className="flex flex-wrap gap-2">
           <span className="text-[11px] font-bold bg-white/20 px-2.5 py-1 rounded-full">🕐 {recipe.time}</span>
           <span className="text-[11px] font-bold bg-white/20 px-2.5 py-1 rounded-full">🍽 {recipe.servings || `${sittings} sittings`}</span>
