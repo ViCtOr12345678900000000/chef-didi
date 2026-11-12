@@ -12,8 +12,7 @@ import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/di
 
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 mins
 
-// ============ SMALL HELPER COMPONENTS ============
-// These are just previews for now - we build the real logic inside #testing first
+// ============ PREVIEW COMPONENTS (Locked for users, real logic in #testing) ============
 
 function BudgetPreview({ theme, onGoTesting }) {
   return (
@@ -56,10 +55,22 @@ export default function App() {
   const [themeId, setThemeId] = useState('purple');
   const [lang, setLang] = useState('en');
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeTab, setActiveTab] = useState('home'); // home | cook | budget | order | more
+  const [activeTab, setActiveTab] = useState('home');
+  const [lockedMsg, setLockedMsg] = useState('');
+
+  // 🔒 LOCKED FOR USERS - Change to [] to unlock when ready
+  const LOCKED_TABS = ['budget', 'order'];
+
+  const handleTabClick = (tabId) => {
+    if (LOCKED_TABS.includes(tabId)) {
+      setLockedMsg(tabId === 'budget' ? 'Cook With ₦5k' : 'Order Food Near Me');
+      setTimeout(() => setLockedMsg(''), 2500);
+      return;
+    }
+    setActiveTab(tabId);
+  };
 
   const theme = THEMES[themeId] || THEMES.purple;
-
   const handleThemeChange = (newTheme) => setThemeId(newTheme);
   const handleLangChange = (newLang) => setLang(newLang);
 
@@ -119,7 +130,6 @@ export default function App() {
 
   useEffect(() => { doMigrate(); }, []);
 
-  // --- TRACKING: Don't count secret pages ---
   useEffect(() => {
     if (typeof window !== 'undefined' && ['#my-number', '#advertise', '#testing'].includes(window.location.hash)) return;
     const last = Number(sessionStorage.getItem('didi-counted-at') || 0);
@@ -153,7 +163,6 @@ export default function App() {
     localStorage.removeItem("didi_lastActive");
   }, [themeId, lang]);
 
-  // --- 5 MIN IDLE LOGOUT ---
   const timerRef = useRef(null);
   useEffect(() => {
     if (!user) return;
@@ -201,13 +210,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white w-[100vw] py-8 pb-24 relative">
       <div className={`absolute top-0 left-0 right-0 h-[180px] bg-gradient-to-b ${theme.softBg} to-white pointer-events-none`} />
-      
       <button onClick={() => setShowSidebar(true)} className={`fixed top-4 left-4 z-40 w-11 h-11 rounded-full bg-white border ${theme.softBorder} shadow-md flex items-center justify-center ${theme.accent} hover:scale-105 active:scale-95 transition`}>
         <Menu size={20} />
       </button>
       <Sidebar theme={theme} open={showSidebar} onClose={() => setShowSidebar(false)} user={user} onLogin={() => { setShowSidebar(false); setShowAuth(true); }} />
 
-      {/* ===== HEADER - Same as before, but shorter ===== */}
       <div className="relative text-center mb-6 px-4">
         <div className={`w-11 h-11 mx-auto mb-3 rounded-xl bg-white border ${theme.softBorder} ${theme.accent} flex items-center justify-center shadow-sm`}>
           <ChefHat size={20} />
@@ -227,26 +234,24 @@ export default function App() {
         </div>
       </div>
 
-      {/* ===== CONTENT BY TAB ===== */}
       {activeTab === 'home' && (
         <div className="px-4 max-w-[600px] mx-auto space-y-3">
-          {/* 3 BIG CARDS - This is the whole home now */}
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
             <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl">🍲</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Cook With What I Have</p><p className="text-stone-500 text-[13px]">Enter ingredients → Get recipe</p></div>
             <span>→</span>
           </button>
 
-          <button onClick={() => setActiveTab('budget')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
+          <button onClick={() => handleTabClick('budget')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
             <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center text-2xl">💰</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Cook With ₦5k</p><p className="text-stone-500 text-[13px]">See today's prices in your market</p></div>
-            <span className="text-[10px] bg-green-600 text-white px-2 py-1 rounded-full font-bold">NEW</span>
+            <span className="text-[11px] bg-stone-800 text-white px-2.5 py-1 rounded-full font-bold">🔒 SOON</span>
           </button>
 
-          <button onClick={() => setActiveTab('order')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
+          <button onClick={() => handleTabClick('order')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
             <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-2xl">🛵</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Order Food Near Me</p><p className="text-stone-500 text-[13px]">Too lazy? Order from home cooks</p></div>
-            <span className="text-[10px] bg-orange-500 text-white px-2 py-1 rounded-full font-bold">NEW</span>
+            <span className="text-[11px] bg-stone-800 text-white px-2.5 py-1 rounded-full font-bold">🔒 SOON</span>
           </button>
 
           <div className="pt-2">
@@ -276,21 +281,27 @@ export default function App() {
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">❤️ Favourites & History <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
           <div className="bg-stone-50 rounded-2xl p-4 text-sm">
             <p className="font-bold">Settings</p>
-            <p className="text-stone-500 text-xs mt-1">Goal, Theme, Language — change them inside Cook tab (top of IngredientPicker). We will move them here fully in the next step.</p>
+            <p className="text-stone-500 text-xs mt-1">Goal, Theme, Language — change them inside Cook tab. We will move them here fully next.</p>
           </div>
         </div>
       )}
 
-      {/* ===== BOTTOM NAV - The restructure ===== */}
+      {lockedMsg && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-black text-white text-sm font-bold px-4 py-2.5 rounded-full shadow-lg whitespace-nowrap">
+          🔒 {lockedMsg} — Coming Soon
+        </div>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-40">
         <div className="max-w-[600px] mx-auto flex justify-around py-2 px-2">
           {TABS.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const isLocked = LOCKED_TABS.includes(tab.id);
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl min-w-[60px] ${isActive ? `${theme.accent} bg-purple-50` : 'text-stone-400'}`}>
+              <button key={tab.id} onClick={() => handleTabClick(tab.id)} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl min-w-[60px] ${isActive ? `${theme.accent} bg-purple-50` : 'text-stone-400'} ${isLocked ? 'opacity-50' : ''}`}>
                 <Icon size={20} />
-                <span className="text-[11px] font-bold">{tab.label}</span>
+                <span className="text-[11px] font-bold flex items-center gap-1">{isLocked ? '🔒 ' : ''}{tab.label}</span>
               </button>
             );
           })}
