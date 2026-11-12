@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check, Copy, MessageCircle, Pause, Play, Sparkles } from "lucide-react";
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 import { getDiasporaSwap } from "../lib/translator";
+import CostEstimator from "./CostEstimator";
 import DiasporaTranslator from "./DiasporaTranslator";
 
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
@@ -16,7 +17,6 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
   const [copied, setCopied] = useState(false);
   const [addedShop, setAddedShop] = useState(false);
 
-  // Sync state with localStorage on mount & persist recipe state so it survives refreshes
   useEffect(() => {
     if (recipe) {
       try {
@@ -72,7 +72,14 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
     try { await navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { } 
   };
 
-  // Explicit clear handler that wipes localStorage persistence
+  const handleFavClick = (e) => {
+    if (e) e.preventDefault();
+    const newFav = toggleFavourite(user, recipe);
+    setFav(newFav);
+    window.dispatchEvent(new Event("didi-fav-updated"));
+    window.dispatchEvent(new Event("didi-sync-now"));
+  };
+
   const handleClearAll = (e) => {
     if (e) e.preventDefault();
     try {
@@ -87,7 +94,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
       <div className="flex items-center gap-2 mb-4">
         <span className={`w-9 h-9 rounded-full bg-gradient-to-br ${theme.btn} text-white flex items-center justify-center`}>3</span>
         <h2 className="font-display font-light text-[21px]"><span className="italic text-[#7B61FF]">Didi's</span> Response</h2>
-        <button type="button" onClick={(e) => { e.preventDefault(); setFav(toggleFavourite(user, recipe)); }} className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center transition ${fav ? "bg-red-500 text-white" : "bg-stone-100"}`}><Heart size={16} fill={fav ? "white" : "none"} /></button>
+        <button type="button" onClick={handleFavClick} className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center transition ${fav ? "bg-red-500 text-white" : "bg-stone-100"}`}><Heart size={16} fill={fav ? "white" : "none"} /></button>
         <button type="button" onClick={(e) => { e.preventDefault(); setShowShare(true); }} className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center"><Share2 size={16} /></button>
       </div>
 
@@ -136,7 +143,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         )}
       </div>
 
-      
+      <CostEstimator recipe={{ ...recipe, ingredients: allIngredients }} location={location} themeId={themeId} user={user} />
       <DiasporaTranslator recipe={{ ...recipe, ingredients: allIngredients }} />
 
       <p className="font-bold text-[13px] mb-2 mt-4">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
@@ -172,7 +179,6 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
 
       {onAddToKcal && <button type="button" onClick={(e) => { e.preventDefault(); onAddToKcal(); }} className="w-full h-11 bg-[#1A1A2E] text-white rounded-full flex items-center justify-center gap-1.5 text-[13px] font-bold mb-2"><Flame size={15} /> Add this recipe to my Kcal today</button>}
       
-      {/* Action buttons with persistent Clear handler */}
       <div className="flex gap-2">
         <button type="button" onClick={(e) => { e.preventDefault(); if(onGenerateAnother) onGenerateAnother(); }} className={`flex-1 h-11 text-white rounded-full bg-gradient-to-r ${theme.btn} shadow-md text-[13px] font-bold`}>Generate Another</button>
         <button type="button" onClick={handleClearAll} className="flex-1 h-11 bg-white border rounded-full text-[13px] font-bold">Clear</button>
