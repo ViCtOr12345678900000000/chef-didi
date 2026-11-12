@@ -1,9 +1,24 @@
-import { Redis } from "@upstash/redis";
+// api/community.js - hardened, never returns HTML
+let redis = null;
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+function getRedis() {
+  if (redis) return redis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  // lazy import so missing env doesn't kill function at import time
+  const { Redis } = require("@upstash/redis");
+  redis = new Redis({ url, token });
+  return redis;
+}
+
+function parseBody(req) {
+  if (!req.body) return {};
+  if (typeof req.body === "string") {
+    try { return JSON.parse(req.body); } catch { return {}; }
+  }
+  return req.body;
+}
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -11,19 +26,25 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const type = req.query.type || req.body?.type;
-
   try {
+    const body = parseBody(req);
+    const type = req.query.type || body.type;
+
     // ---------- MARKET PRICES ----------
     if (type === "market-prices") {
+      const client = getRedis();
+      if (!client) {
+        return res.status(500).json({ error: "Missing UPSTASH_REDIS_REST_URL / TOKEN in Vercel" });
+      }
+
       if (req.method === "GET") {
         const location = req.query.location || "lagos";
-        const keys = await redis.keys(`didi:price:${location}:*`);
+        const keys = await client.keys(`didi:price:${location}:*`);
         const prices = {};
         const counts = {};
         for (const k of keys) {
           const item = k.split(":").slice(3).join(":");
-          const v = await redis.get(k);
+          const v = await client.get(k);
           if (v && typeof v === "object") {
             prices[item] = Math.round(v.sum / Math.max(1, v.count));
             counts[item] = v.count;
@@ -36,7 +57,7 @@ export default async function handler(req, res) {
       }
 
       if (req.method === "POST") {
-        const { location = "lagos", item, price, email = "guest" } = req.body || {};
+        const { location = "lagos", item, price, email = "guest" } = body;
         if (!item || !price) return res.status(400).json({ error: "item + price required" });
 
         const cleanItem = String(item).toLowerCase().trim()
@@ -47,7 +68,7 @@ export default async function handler(req, res) {
         if (!amount || amount <= 0) return res.status(400).json({ error: "invalid price" });
 
         const key = `didi:price:${location}:${cleanItem}`;
-        const existing = await redis.get(key);
+        const existing = await client.get(key);
         let sum = amount, count = 1;
         if (existing && typeof existing === "object") {
           sum = (existing.sum || 0) + amount;
@@ -57,7 +78,7 @@ export default async function handler(req, res) {
           count = 2;
         }
         const average = Math.round(sum / count);
-        await redis.set(key, { sum, count, avg: average, lastBy: email, updatedAt: new Date().toISOString() });
+        await client.set(key, { sum, count, avg: average, lastBy: email, updatedAt: new Date().toISOString() });
 
         return res.status(200).json({ ok: true, item: cleanItem, price: amount, average, count, location });
       }
@@ -66,50 +87,54 @@ export default async function handler(req, res) {
     }
 
     // ---------- QUESTS ----------
-    if (type !== "quests") return res.status(400).json({ error: "unknown type" });
+    if (type === "quests") {
+      const client = getRedis();
+      if (!client) return res.status(500).json({ error: "Missing UPSTASH env vars" });
 
-    if (req.method === "GET") {
-      const location = req.query.location || "lagos";
-      const keys = await redis.keys(`didi:quest:*:${location}`);
-      const counts = {};
-      for (const k of keys) {
-        const questId = k.split(":")[2];
-        const v = await redis.get(k);
-        counts[questId] = Number(v) || 0;
-      }
-      const joinKeys = await redis.keys(`didi:quest_join:*:${location}`);
-      const joined = {};
-      for (const k of joinKeys) {
-        const questId = k.split(":")[2];
-        const v = await redis.get(k);
-        joined[questId] = Number(v) || 0;
-      }
-      return res.status(200).json({ counts, joined });
-    }
-
-    if (req.method === "POST") {
-      const { action = "complete", questId, location = "lagos", email = "guest" } = req.body || {};
-      if (!questId) return res.status(400).json({ error: "questId required" });
-      if (action === "join") {
-        const joinKey = `didi:quest_join:${questId}:${location}`;
-        const joinedTotal = await redis.incr(joinKey);
-        const userKey = `didi:user_quests:${email.toLowerCase()}`;
-        const existing = (await redis.get(userKey)) || [];
-        const arr = Array.isArray(existing) ? existing : [];
-        if (!arr.find(q => q.id === questId)) {
-          arr.push({ id: questId, progress: 0, total: 2, completed: false, joinedAt: new Date().toISOString() });
-          await redis.set(userKey, arr);
+      if (req.method === "GET") {
+        const location = req.query.location || "lagos";
+        const keys = await client.keys(`didi:quest:*:${location}`);
+        const counts = {};
+        for (const k of keys) {
+          const questId = k.split(":")[2];
+          const v = await client.get(k);
+          counts[questId] = Number(v) || 0;
         }
-        return res.status(200).json({ ok: true, joinedTotal });
+        const joinKeys = await client.keys(`didi:quest_join:*:${location}`);
+        const joined = {};
+        for (const k of joinKeys) {
+          const questId = k.split(":")[2];
+          const v = await client.get(k);
+          joined[questId] = Number(v) || 0;
+        }
+        return res.status(200).json({ counts, joined });
       }
-      const key = `didi:quest:${questId}:${location}`;
-      const total = await redis.incr(key);
-      return res.status(200).json({ ok: true, totalCompletions: total });
+
+      if (req.method === "POST") {
+        const { action = "complete", questId, location = "lagos", email = "guest" } = body;
+        if (!questId) return res.status(400).json({ error: "questId required" });
+        if (action === "join") {
+          const joinKey = `didi:quest_join:${questId}:${location}`;
+          const joinedTotal = await client.incr(joinKey);
+          const userKey = `didi:user_quests:${email.toLowerCase()}`;
+          const existing = (await client.get(userKey)) || [];
+          const arr = Array.isArray(existing) ? existing : [];
+          if (!arr.find(q => q.id === questId)) {
+            arr.push({ id: questId, progress: 0, total: 2, completed: false, joinedAt: new Date().toISOString() });
+            await client.set(userKey, arr);
+          }
+          return res.status(200).json({ ok: true, joinedTotal });
+        }
+        const key = `didi:quest:${questId}:${location}`;
+        const total = await client.incr(key);
+        return res.status(200).json({ ok: true, totalCompletions: total });
+      }
+      return res.status(405).json({ error: "method not allowed" });
     }
 
-    return res.status(405).json({ error: "method not allowed" });
+    return res.status(400).json({ error: "unknown type: " + type });
   } catch (e) {
-    console.error(e);
+    console.error("community error:", e);
     return res.status(500).json({ error: e.message || "Server error" });
   }
 }
