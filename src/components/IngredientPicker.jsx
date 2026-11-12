@@ -4,7 +4,7 @@ import AIResponse from "./AIResponse";
 import Footer from "./Footer";
 import SettingsBar from "./SettingsBar";
 import CalorieCalculator from "./CalorieCalculator";
-import Quests from "./Quests";
+
 
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, savePrefs, caloriesFor, getFavourites, getHistory, getShopping, toggleShopping, clearShopping, getPantry, savePantry, addHistory, progressQuests } from "../lib/didi";
 const GOAL_ICONS = { normal: <UtensilsCrossed size={15} />, weightloss: <TrendingDown size={16} />, weightgain: <TrendingUp size={16} />, fit: <Dumbbell size={16} /> };
