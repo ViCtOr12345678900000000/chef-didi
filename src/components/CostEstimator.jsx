@@ -3,33 +3,26 @@ import { marketLocationFor } from "../lib/didi";
 
 // Realistic Nigerian retail unit prices (in ₦) per standard cooking unit
 const UNIT_RATES_NGN = [
-  // Tubers & Grains (per cup / standard unit)
-  { keywords: ["puna yam", "yam"], unitPrice: 2500, defaultQty: 0.3, unitType: "tuber" }, // ~₦2,500 per medium tuber (300g ≈ 0.3 tuber = ₦750)
-  { keywords: ["rice", "basmati", "ofada"], unitPrice: 400, defaultQty: 1, unitType: "cup" }, // ~₦400 per cup
-  { keywords: ["beans", "oloyin", "honey beans"], unitPrice: 450, defaultQty: 1, unitType: "cup" }, // ~₦450 per cup
-  { keywords: ["garri"], unitPrice: 250, defaultQty: 1, unitType: "cup" }, // ~₦250 per cup
-  { keywords: ["semovita", "semo", "wheat", "poundo"], unitPrice: 350, defaultQty: 1, unitType: "cup" }, // ~₦350 per cup
-  { keywords: ["plantain"], unitPrice: 400, defaultQty: 1, unitType: "finger" }, // ~₦400 per ripe finger
-  { keywords: ["spaghetti", "pasta", "macaroni"], unitPrice: 1100, defaultQty: 1, unitType: "pack" }, // ~₦1,100 per 500g pack
-  { keywords: ["indomie", "noodles"], unitPrice: 350, defaultQty: 1, unitType: "pack" }, // ~₦350 per small pack
+  { keywords: ["puna yam", "yam"], unitPrice: 2500, defaultQty: 0.3, unitType: "tuber" },
+  { keywords: ["rice", "basmati", "ofada"], unitPrice: 400, defaultQty: 1, unitType: "cup" },
+  { keywords: ["beans", "oloyin", "honey beans"], unitPrice: 450, defaultQty: 1, unitType: "cup" },
+  { keywords: ["garri"], unitPrice: 250, defaultQty: 1, unitType: "cup" },
+  { keywords: ["semovita", "semo", "wheat", "poundo"], unitPrice: 350, defaultQty: 1, unitType: "cup" },
+  { keywords: ["plantain"], unitPrice: 400, defaultQty: 1, unitType: "finger" },
+  { keywords: ["spaghetti", "pasta", "macaroni"], unitPrice: 1100, defaultQty: 1, unitType: "pack" },
+  { keywords: ["indomie", "noodles"], unitPrice: 350, defaultQty: 1, unitType: "pack" },
   { keywords: ["bread"], unitPrice: 1200, defaultQty: 0.5, unitType: "loaf" },
-
-  // Proteins
   { keywords: ["titus", "mackerel"], unitPrice: 1800, defaultQty: 1, unitType: "medium fish" },
   { keywords: ["smoked fish", "panla", "catfish"], unitPrice: 1500, defaultQty: 1, unitType: "piece" },
   { keywords: ["stockfish", "okporoko"], unitPrice: 1500, defaultQty: 1, unitType: "cut" },
   { keywords: ["chicken"], unitPrice: 1800, defaultQty: 1, unitType: "lap/cut" },
   { keywords: ["beef", "meat", "goat", "assorted", "shaki", "ponmo"], unitPrice: 1500, defaultQty: 1, unitType: "portion" },
-  { keywords: ["egg"], unitPrice: 250, defaultQty: 1, unitType: "egg" }, // ~₦250 per single egg
-  { keywords: ["crayfish"], unitPrice: 200, defaultQty: 1, unitType: "tbsp" }, // ~₦200 per tablespoon
-
-  // Oils & Liquids
-  { keywords: ["palm oil"], unitPrice: 150, defaultQty: 1, unitType: "tbsp" }, // ~₦150 per tbsp (~₦2,500/L)
+  { keywords: ["egg"], unitPrice: 250, defaultQty: 1, unitType: "egg" },
+  { keywords: ["crayfish"], unitPrice: 200, defaultQty: 1, unitType: "tbsp" },
+  { keywords: ["palm oil"], unitPrice: 150, defaultQty: 1, unitType: "tbsp" },
   { keywords: ["vegetable oil", "groundnut oil", "oil"], unitPrice: 150, defaultQty: 1, unitType: "tbsp" },
   { keywords: ["coconut milk"], unitPrice: 1500, defaultQty: 1, unitType: "tin" },
   { keywords: ["tomato paste", "tin tomato"], unitPrice: 300, defaultQty: 1, unitType: "sachet" },
-
-  // Vegetables & Peppers
   { keywords: ["tatashe", "bell pepper"], unitPrice: 300, defaultQty: 1, unitType: "medium" },
   { keywords: ["scotch bonnet", "rodo", "habanero", "pepper"], unitPrice: 100, defaultQty: 1, unitType: "piece" },
   { keywords: ["tomato"], unitPrice: 200, defaultQty: 1, unitType: "medium" },
@@ -38,8 +31,6 @@ const UNIT_RATES_NGN = [
   { keywords: ["okra"], unitPrice: 300, defaultQty: 1, unitType: "portion" },
   { keywords: ["egusi", "melon"], unitPrice: 500, defaultQty: 1, unitType: "cup" },
   { keywords: ["ogbono"], unitPrice: 600, defaultQty: 0.5, unitType: "cup" },
-
-  // Seasonings & Pantry
   { keywords: ["seasoning cube", "maggi", "knorr", "royco"], unitPrice: 50, defaultQty: 1, unitType: "cube" },
   { keywords: ["salt"], unitPrice: 50, defaultQty: 1, unitType: "pinch/tsp" },
   { keywords: ["garlic", "ginger"], unitPrice: 150, defaultQty: 1, unitType: "clove/thumb" },
@@ -47,16 +38,72 @@ const UNIT_RATES_NGN = [
   { keywords: ["water"], unitPrice: 0, defaultQty: 1, unitType: "ml" },
 ];
 
-// Parses quantity from string like "2 cups of beans", "300g Puna yam", "2 tablespoons palm oil"
+// Parses natural text like "5000", "5,000", "5k", "1.5k", "five thousand", "two hundred and fifty"
+function parseSmartPrice(input) {
+  if (!input) return 0;
+  let str = String(input)
+    .toLowerCase()
+    .replace(/[₦$,]/g, "")
+    .replace(/\b(naira|dollars?|bucks?|only)\b/g, "")
+    .trim();
+
+  if (!str) return 0;
+
+  // 1. Handle shorthand suffixes like "5k", "1.5k", "2m"
+  const suffixMatch = str.match(/^(\d+(?:\.\d+)?)\s*(k|thousand|m|million)$/);
+  if (suffixMatch) {
+    const num = parseFloat(suffixMatch[1]);
+    const mult = suffixMatch[2].startsWith("m") ? 1_000_000 : 1_000;
+    return Math.round(num * mult);
+  }
+
+  // 2. Handle pure digits (e.g. "5000" or "500.50")
+  if (/^\d+(?:\.\d+)?$/.test(str)) {
+    return Math.round(parseFloat(str));
+  }
+
+  // 3. Handle English number words (e.g. "five thousand", "one thousand five hundred")
+  const SMALL = {
+    zero: 0, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5,
+    six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+    thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+    eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40,
+    fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  };
+  const SCALE = { hundred: 100, thousand: 1000, k: 1000, million: 1000000 };
+
+  const words = str.replace(/[-]/g, " ").split(/\s+/).filter((w) => w && w !== "and");
+  let total = 0;
+  let current = 0;
+  let matchedAny = false;
+
+  for (const w of words) {
+    if (/^\d+(?:\.\d+)?$/.test(w)) {
+      current += parseFloat(w);
+      matchedAny = true;
+    } else if (SMALL[w] !== undefined) {
+      current += SMALL[w];
+      matchedAny = true;
+    } else if (w === "hundred") {
+      current = (current || 1) * 100;
+      matchedAny = true;
+    } else if (SCALE[w] !== undefined) {
+      total += (current || 1) * SCALE[w];
+      current = 0;
+      matchedAny = true;
+    }
+  }
+
+  return matchedAny ? Math.round(total + current) : 0;
+}
+
 function estimateIngredientCost(rawText, isAbroad) {
   const clean = String(rawText).toLowerCase().trim();
   if (clean.includes("water")) return 0;
 
-  // Find matching ingredient rule
   const rule = UNIT_RATES_NGN.find((r) => r.keywords.some((k) => clean.includes(k)));
   if (!rule) return isAbroad ? 2 : 500;
 
-  // Extract leading number or fraction (e.g. "2", "0.5", "1/2", "300g")
   let multiplier = rule.defaultQty;
   const numMatch = clean.match(/^(\d+(?:\.\d+)?|\d+\/\d+)/);
 
@@ -69,17 +116,16 @@ function estimateIngredientCost(rawText, isAbroad) {
       val = parseFloat(val);
     }
 
-    // Handle gram/ml weights (e.g. "300g Puna yam" -> 0.3 of a 1kg tuber)
     if (/\d+\s*(g|gram|grams)\b/.test(clean)) {
       if (rule.unitType === "tuber" || rule.unitType === "portion" || rule.unitType === "lap/cut") {
         multiplier = Math.max(0.25, val / 1000);
       } else if (rule.unitType === "cup") {
-        multiplier = Math.max(0.5, val / 200); // 1 cup ≈ 200g
+        multiplier = Math.max(0.5, val / 200);
       } else {
         multiplier = Math.max(0.5, val / 250);
       }
     } else if (/\d+\s*(kg)\b/.test(clean)) {
-      multiplier = val * 4; // 1kg ≈ 4-5 cups or 1 whole tuber
+      multiplier = val * 4;
     } else if (/\d+\s*(ml)\b/.test(clean)) {
       multiplier = Math.max(0.5, val / 250);
     } else {
@@ -87,7 +133,6 @@ function estimateIngredientCost(rawText, isAbroad) {
     }
   }
 
-  // Round to nearest ₦50 for clean Nigerian pricing
   const rawNgn = rule.unitPrice * multiplier;
   const roundedNgn = Math.max(50, Math.round(rawNgn / 50) * 50);
 
@@ -96,7 +141,7 @@ function estimateIngredientCost(rawText, isAbroad) {
 
 export default function CostEstimator({ recipe, location = "nigeria", user }) {
   const defaultLoc = marketLocationFor(location);
-  const [selectedLoc, setSelectedLoc] = useState(defaultLoc); // "lagos" | "abroad"
+  const [selectedLoc, setSelectedLoc] = useState(defaultLoc);
   const [community, setCommunity] = useState({ prices: {}, counts: {} });
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
@@ -132,7 +177,6 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
       return { price: Number(community.prices[found]), source: "community", count: community.counts[found] || 1 };
     }
 
-    // Quantity-aware Nigerian market estimate
     const est = estimateIngredientCost(fullText, isAbroad);
     return { price: est, source: "estimate", count: 0 };
   };
@@ -156,16 +200,19 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
     load();
   }, [selectedLoc]);
 
+  // Live preview of parsed amount as user types "5k" or "five thousand"
+  const parsedPreview = parseSmartPrice(reportPrice);
+
   const handleReport = async () => {
     const finalItem = (reportItem === "__other__" ? customItem : reportItem).trim();
-    if (!finalItem || !reportPrice) {
+    if (!finalItem || !reportPrice.trim()) {
       setReportMsg("Pick an ingredient + enter price");
       return;
     }
 
-    const p = parseInt(String(reportPrice).replace(/[^0-9]/g, ""), 10);
+    const p = parseSmartPrice(reportPrice);
     if (!p || p < 1) {
-      setReportMsg(`Enter a real price e.g. ${isAbroad ? "5" : "1500"}`);
+      setReportMsg(`Enter a valid amount e.g. ${isAbroad ? "5 or five" : "500, 5k, or five thousand"}`);
       return;
     }
 
@@ -191,7 +238,7 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
         counts: { ...prev.counts, [finalItem.toLowerCase()]: (prev.counts[finalItem.toLowerCase()] || 0) + 1 },
       }));
 
-      setReportMsg(`✅ Saved! New ${selectedLoc === "lagos" ? "Nigerian" : "Abroad"} average: ${currency}${newAvg.toLocaleString()}`);
+      setReportMsg(`✅ Saved ${currency}${p.toLocaleString()}! New average: ${currency}${newAvg.toLocaleString()}`);
       setReportPrice("");
       setCustomItem("");
       setTimeout(() => setShowReport(false), 1800);
@@ -235,9 +282,7 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
 
       <div className="flex items-center justify-between mb-3">
         <p className="text-[11px] text-stone-400">
-          {communityCount > 0
-            ? "Green = community reported. Amber = estimated per portion."
-            : "Estimated per recipe portion. Tap below to report what you paid!"}
+          {communityCount > 0 ? "Green = community reported. Amber = estimated." : "Estimated per portion. Tap below to update!"}
         </p>
         <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0">
           {loading ? "Syncing..." : `${communityCount}/${rows.length} verified`}
@@ -257,7 +302,7 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
               {r.price > 0 && (
                 r.source === "community" ? (
                   <span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                    ✓ {r.count} {r.count === 1 ? "report" : "reports"}
+                    ✓ {r.count} reports
                   </span>
                 ) : (
                   <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
@@ -309,22 +354,22 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
               type="text"
               value={customItem}
               onChange={(e) => setCustomItem(e.target.value)}
-              placeholder="Type ingredient e.g. 1 cup of beans"
+              placeholder="Type ingredient e.g. Beans"
               className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2"
             />
           )}
 
           <div className="flex gap-2">
-<input
-  type="tel"
-  inputMode="numeric"
-  pattern="[0-9]*"
-  value={reportPrice}
-  onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))}
-  placeholder={isAbroad ? "Price in $ e.g. 5" : "Price in ₦ e.g. 55"}
-  className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none"
-/>
-
+            <input
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
+              value={reportPrice}
+              onChange={(e) => setReportPrice(e.target.value)}
+              placeholder={isAbroad ? "e.g. 5 or five" : "e.g. 5000, 5k, or five thousand"}
+              className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none"
+            />
             <button
               type="button"
               onClick={handleReport}
@@ -334,6 +379,13 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
               {reportSending ? "Saving..." : "Save"}
             </button>
           </div>
+
+          {reportPrice.trim() && parsedPreview > 0 && (
+            <p className="text-[11px] text-green-700 font-semibold mt-1.5 pl-2">
+              Detected amount: {currency}{parsedPreview.toLocaleString()}
+            </p>
+          )}
+
           {reportMsg && <p className="text-[11px] mt-2 font-semibold">{reportMsg}</p>}
           <button
             type="button"
