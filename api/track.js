@@ -57,21 +57,30 @@ export default async function handler(req, res) {
       time: new Date().toISOString(),
     };
 
-    // SAME method as my-number.js — no pipeline
-    const pushRes = await fetch(`${url}/rpush/visitors/${encodeURIComponent(JSON.stringify(entry))}`, { headers });
-    const pushData = await pushRes.json();
-    if (pushData.error) {
-      return res.status(200).json({ ok: false, error: "rpush-failed: " + pushData.error });
+    // --- FIX: visitors is a STRING key, not a LIST ---
+    // 1. GET the current string
+    const getRes = await fetch(`${url}/get/visitors`, { headers });
+    const getData = await getRes.json();
+    let list = [];
+    try {
+      const raw = getData.result;
+      if (typeof raw === "string" && raw) list = JSON.parse(raw);
+      else if (Array.isArray(raw)) list = raw;
+    } catch { list = []; }
+    if (!Array.isArray(list)) list = [];
+
+    // 2. Append + keep last 1000
+    list.push(entry);
+    if (list.length > 1000) list = list.slice(-1000);
+
+    // 3. SET it back as a string — same format my-number.js already reads
+    const setRes = await fetch(`${url}/set/visitors/${encodeURIComponent(JSON.stringify(list))}`, { headers });
+    const setData = await setRes.json();
+    if (setData.error) {
+      return res.status(200).json({ ok: false, error: "set-failed: " + setData.error });
     }
 
-    // Keep only last 1000
-    await fetch(`${url}/ltrim/visitors/-1000/-1`, { headers }).catch(() => {});
-
-    // Verify it actually landed — return real list length
-    const lenRes = await fetch(`${url}/llen/visitors`, { headers });
-    const lenData = await lenRes.json();
-
-    return res.status(200).json({ ok: true, saved: true, visitNumber, listLength: lenData.result });
+    return res.status(200).json({ ok: true, saved: true, visitNumber, listLength: list.length });
   } catch (e) {
     return res.status(200).json({ ok: false, error: String(e.message || e) });
   }
