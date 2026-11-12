@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChefHat, Menu } from 'lucide-react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
@@ -8,6 +8,8 @@ import Sidebar from './components/Sidebar';
 import AdSlot from './components/AdSlot';
 import Footer from './components/Footer';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
+
+const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 mins
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -94,6 +96,7 @@ export default function App() {
     const session = { email: u.email, name: u.name };
     setUser(session); setShowAuth(false);
     localStorage.removeItem("didi_guest_count");
+    localStorage.setItem("didi_lastActive", Date.now().toString());
     await restoreFromCloud(u.email);
     const p = getPrefs(u.email);
     if (p.theme) setThemeId(p.theme);
@@ -101,11 +104,55 @@ export default function App() {
     window.dispatchEvent(new Event("didi-data-restored"));
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     const currentTheme = themeId; const currentLang = lang;
     logoutUser(); setUser(null); setThemeId(currentTheme); setLang(currentLang);
     localStorage.setItem("didi_prefs_guest", JSON.stringify({ theme: currentTheme, lang: currentLang }));
-  };
+    localStorage.removeItem("didi_lastActive");
+  }, [themeId, lang]);
+
+  // --- 5 MIN IDLE LOGOUT ---
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const resetTimer = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      localStorage.setItem("didi_lastActive", Date.now().toString());
+      timerRef.current = setTimeout(() => {
+        handleLogout();
+      }, IDLE_TIMEOUT);
+    };
+
+    // If they left 5+ mins ago and came back, log out immediately
+    const last = Number(localStorage.getItem("didi_lastActive") || 0);
+    if (last && Date.now() - last > IDLE_TIMEOUT) {
+      handleLogout();
+      return;
+    }
+
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+    events.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
+
+    const onVisible = () => {
+      if (!document.hidden) {
+        const lastActive = Number(localStorage.getItem("didi_lastActive") || 0);
+        if (Date.now() - lastActive > IDLE_TIMEOUT) handleLogout();
+        else resetTimer();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    resetTimer();
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      events.forEach((e) => window.removeEventListener(e, resetTimer));
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [user, handleLogout]);
+  // --- END IDLE LOGOUT ---
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
