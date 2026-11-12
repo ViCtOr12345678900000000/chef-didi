@@ -4,41 +4,31 @@ const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const VALID_TYPES = ["visitors", "users", "reviews"];
 
 async function redis(cmd, ...args) {
-  if (!URL || !TOKEN) {
-    throw new Error("Upstash environment variables are missing.");
-  }
+  if (!URL || !TOKEN) throw new Error("Upstash environment variables are missing.");
   const baseURL = URL.replace(/\/$/, "");
   const endpoint = `${baseURL}/${cmd}/${args.map(arg => encodeURIComponent(String(arg))).join("/")}`;
-
-  const res = await fetch(endpoint, {
-    headers: { Authorization: `Bearer ${TOKEN}` },
-  });
-
+  const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${TOKEN}` } });
   const json = await res.json();
-  if (!res.ok || json.error) {
-    throw new Error(json.error || "Redis request failed.");
-  }
+  if (!res.ok || json.error) throw new Error(json.error || "Redis request failed.");
   return json.result;
 }
 
 async function getList(key) {
   try {
     const rawList = await redis("LRANGE", key, "0", "-1");
-    if (Array.isArray(rawList)) {
-      const parsedItems = [];
+    if (Array.isArray(rawList) && rawList.length > 0) {
+      const out = [];
       for (const item of rawList) {
         try {
           let s = typeof item === "string" ? item : JSON.stringify(item);
           try { s = decodeURIComponent(s); } catch {}
           try { s = decodeURIComponent(s); } catch {}
           const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) parsedItems.push(...parsed);
-          else parsedItems.push(parsed);
-        } catch {
-          parsedItems.push(item);
-        }
+          if (Array.isArray(parsed)) out.push(...parsed);
+          else if (parsed && typeof parsed === "object") out.push(parsed);
+        } catch {}
       }
-      return parsedItems;
+      return out;
     }
   } catch {}
 
@@ -54,16 +44,11 @@ async function getList(key) {
   }
 }
 
-async function saveList(key, list) {
-  // For 'users', always maintain a Redis List so login.js & migrate.js stay compatible
-  if (key === "users") {
-    await redis("DEL", "users");
-    for (const item of list) {
-      await redis("RPUSH", "users", JSON.stringify(item));
-    }
-    return true;
+async function saveAsRedisList(key, list) {
+  await redis("DEL", key);
+  for (const item of list) {
+    await redis("RPUSH", key, JSON.stringify(item));
   }
-  return redis("SET", key, JSON.stringify(list));
 }
 
 export default async function handler(req, res) {
@@ -75,33 +60,32 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      const [visitors, rawUsers, reviews] = await Promise.all([
+      const [visitors, allUsers, reviews] = await Promise.all([
         getList("visitors"),
         getList("users"),
         getList("reviews"),
       ]);
 
-      // Only show users not soft-deleted from the dashboard, plus count total in Upstash
-      const activeUsers = rawUsers.filter(u => !u?.deletedFromAdmin);
-      const hiddenUsersCount = rawUsers.length - activeUsers.length;
+      const visibleUsers = allUsers.filter(u => !u.deletedFromAdmin);
+      const hiddenUsersCount = allUsers.length - visibleUsers.length;
 
       return res.status(200).json({
         visitors,
-        users: activeUsers,
-        totalRegisteredInUpstash: rawUsers.length,
-        hiddenUsersCount,
+        users: visibleUsers,
         reviews,
+        totalRegisteredInUpstash: allUsers.length,
+        hiddenUsersCount,
       });
     }
 
     if (req.method === "POST") {
       const body = req.body || {};
 
-      // Restore all accidentally deleted registered users from Upstash back to AdminDashboard
+      // Restore accidentally deleted users back to AdminDashboard
       if (body.action === "restore-users") {
-        const rawUsers = await getList("users");
-        const restored = rawUsers.map(u => ({ ...u, deletedFromAdmin: false }));
-        await saveList("users", restored);
+        const allUsers = await getList("users");
+        const restored = allUsers.map(u => ({ ...u, deletedFromAdmin: false }));
+        await saveAsRedisList("users", restored);
         return res.status(200).json({ ok: true, restoredCount: restored.length });
       }
 
@@ -128,7 +112,7 @@ export default async function handler(req, res) {
 
       delete entry.type;
       list.unshift(entry);
-      await saveList(type, list.slice(0, 1000));
+      await saveAsRedisList(type, list.slice(0, 1000));
 
       return res.status(200).json({ ok: true, saved: entry });
     }
@@ -143,21 +127,21 @@ export default async function handler(req, res) {
 
       const list = await getList(type);
 
-      // Soft-delete users so they remain safely stored in Upstash
+      // Soft-delete for users so Upstash never loses their account
       if (type === "users") {
-        let updated = false;
-        const softDeletedList = list.map(item => {
-          const isMatch = (body.id && String(item.id) === String(body.id)) || (body.email && item.email === body.email);
-          if (isMatch) {
-            updated = true;
-            return { ...item, deletedFromAdmin: true };
+        const cleanEmail = String(body.email || "").toLowerCase().trim();
+        let found = false;
+        const updated = list.map(u => {
+          if ((body.id && String(u.id) === String(body.id)) || (cleanEmail && u.email?.toLowerCase().trim() === cleanEmail)) {
+            found = true;
+            return { ...u, deletedFromAdmin: true };
           }
-          return item;
+          return u;
         });
 
-        if (!updated) return res.status(404).json({ ok: false, error: "User not found." });
-        await saveList("users", softDeletedList);
-        return res.status(200).json({ ok: true, softDeleted: true });
+        if (!found) return res.status(404).json({ ok: false, error: "User not found." });
+        await saveAsRedisList("users", updated);
+        return res.status(200).json({ ok: true, hidden: 1 });
       }
 
       const filtered = list.filter(item => {
@@ -169,7 +153,7 @@ export default async function handler(req, res) {
       const deleted = list.length - filtered.length;
       if (deleted === 0) return res.status(404).json({ ok: false, error: "Record not found." });
 
-      await saveList(type, filtered);
+      await saveAsRedisList(type, filtered);
       return res.status(200).json({ ok: true, deleted });
     }
 
