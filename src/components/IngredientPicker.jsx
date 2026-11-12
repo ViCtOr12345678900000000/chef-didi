@@ -4,6 +4,8 @@ import AIResponse from "./AIResponse";
 import Footer from "./Footer";
 import SettingsBar from "./SettingsBar";
 import CalorieCalculator from "./CalorieCalculator";
+import WeeklyPlan from "./WeeklyPlan";
+import WeightTrend from "./WeightTrend";
 
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, savePrefs, caloriesFor, getFavourites, getHistory, getShopping, toggleShopping, clearShopping, getPantry, savePantry, addHistory, progressQuests } from "../lib/didi";
 const GOAL_ICONS = { normal: <UtensilsCrossed size={15} />, weightloss: <TrendingDown size={16} />, weightgain: <TrendingUp size={16} />, fit: <Dumbbell size={16} /> };
@@ -30,6 +32,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [pantryInput, setPantryInput] = useState("");
   const [guestCount, setGuestCount] = useState(() => parseInt(localStorage.getItem("didi_guest_count") || "0"));
   const [cloudVersion, setCloudVersion] = useState(0);
+  const [leftoverInput, setLeftoverInput] = useState("");
   const syncTimer = useRef(null);
 
   const needAuth = () => {
@@ -172,7 +175,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
   const [error, setError] = useState("");
   useEffect(() => { if (recipe?.title && user?.email) addHistory(user, recipe); }, [recipe?.title]);
 
-  // FIX: Persist recipe + ingredients so refresh does NOT wipe them. Only Clear wipes.
   useEffect(() => {
     try {
       if (recipe) localStorage.setItem("didi_persisted_recipe", JSON.stringify(recipe));
@@ -263,6 +265,20 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     setTimeout(() => { document.getElementById("find-meal-btn")?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 200);
   };
 
+  // #4 LEFTOVER RESCUE
+  const handleLeftoverRescue = async () => {
+    if (!leftoverInput.trim()) return;
+    if (isGuest && guestCount >= 2) { onRequireAuth?.(); return; }
+    setError(""); setIsLoading(true); scrollToRecipe();
+    try {
+      const leftovers = leftoverInput.split(",").map(s => s.trim()).filter(Boolean);
+      setIngPicker(leftovers);
+      const res = await fetch("/api/generate-recipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ingredients: leftovers, mode: goal, sittings, caloriesPerSitting: cal.perSitting, totalCalories: cal.total, lang, cuisine, location, leftover: true }) });
+      const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed");
+      setRecipe(data.recipe); trackQuestProgress(data.recipe?.title); bumpGuestCount(); syncCloud();
+    } catch(e) { setError(e.message); } finally { setIsLoading(false); }
+  };
+
   const handleClearAll = () => {
     setRecipe(null);
     setIngPicker([]);
@@ -332,6 +348,32 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           {!recipe && !isLoading && (<div className="bg-white rounded-[28px] p-6 shadow-xl"><div className={`${theme.softBg} border border-dashed ${theme.softBorder} rounded-2xl py-8 text-center`}><p className="text-[28px]">🍲</p><p className="text-[14px] font-semibold text-stone-600">Your recipe will appear here.</p><p className="text-[12px] text-stone-400">Pick ingredients → Choose goal → Find Meal</p></div></div>)}
         </div>
       </div>
+
+      {/* LEFTOVER RESCUE #4 */}
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
+        <div className="bg-white rounded-[28px] p-5 shadow-xl">
+          <h2 className="font-display font-light text-[20px]">♻️ Leftover Rescue</h2>
+          <p className="text-[12px] text-stone-400">Got leftover jollof? Don't throw it. Didi remixes it.</p>
+          <div className="flex gap-2 mt-3">
+            <input value={leftoverInput} onChange={e => setLeftoverInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLeftoverRescue()} placeholder="e.g. leftover jollof, 2 eggs, small chicken" className="flex-1 min-w-0 h-12 px-4 bg-stone-50 border rounded-full text-[14px] outline-none" />
+            <button onClick={handleLeftoverRescue} disabled={isLoading || !leftoverInput.trim()} className={`shrink-0 h-12 px-5 rounded-full text-white font-bold text-[13px] bg-gradient-to-r ${theme.btn}`}>{isLoading ? "Rescuing..." : "Rescue It"}</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {['leftover jollof, 2 eggs', 'leftover rice, chicken', 'leftover beans, plantain', 'leftover soup, yam'].map(s => (<button key={s} onClick={() => setLeftoverInput(s)} className="text-[11px] font-semibold px-3 py-1.5 rounded-full border bg-stone-50">{s}</button>))}
+          </div>
+        </div>
+      </div>
+
+      {/* WEEKLY PLAN #3 */}
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6">
+        <WeeklyPlan user={user} goal={goal} sittings={sittings} customCalories={customCalories} cuisine={cuisine} location={location} lang={lang} themeId={themeId} onPickRecipe={(r) => { setRecipe(r); scrollToRecipe(); }} />
+      </div>
+
+      {/* WEIGHT TREND #5 */}
+      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-4">
+        <WeightTrend user={user} themeId={themeId} />
+      </div>
+
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-6 mt-4">
         <div className="bg-white rounded-[24px] p-4 shadow-xl flex flex-wrap gap-2">
           <button onClick={() => { if (needAuth()) return; setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showFav ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <Heart size={14} />} Favourites {isGuest ? "🔒" : `(${favList.length})`}</button>
