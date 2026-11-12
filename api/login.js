@@ -2,9 +2,11 @@ import crypto from "crypto";
 
 async function readAllUsers(url, headers) {
   let allUsers = [];
+
   // 1. Try LRANGE (Redis List)
   const r = await fetch(`${url}/lrange/users/0/-1`, { headers });
   const data = await r.json();
+
   if (Array.isArray(data.result)) {
     for (const item of data.result) {
       try {
@@ -41,9 +43,14 @@ async function saveAllUsersAsList(url, headers, users) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
   const { email, password, localUser } = req.body || {};
-  if (!email || !password) return res.status(400).json({ ok: false, error: "Email and password required" });
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: "Email and password required" });
+  }
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -63,9 +70,11 @@ export default async function handler(req, res) {
 
   let allUsers = await readAllUsers(url, headers);
   const cleanEmail = email.toLowerCase().trim();
-  let foundIndex = allUsers.findIndex(u => u?.email?.toLowerCase().trim() === cleanEmail);
+  const foundIndex = allUsers.findIndex(
+    (u) => u?.email?.toLowerCase().trim() === cleanEmail
+  );
 
-  // If account existed only in localStorage and was passed along, auto-migrate it to Upstash
+  // If account existed only in localStorage, auto-migrate it to Upstash
   if (foundIndex === -1 && localUser && localUser.password === password) {
     const migratedUser = {
       ...localUser,
@@ -90,7 +99,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: "Wrong password. Try again." });
   }
 
-  // Link vid cookie, increment visitCount, and restore if accidentally deleted from AdminDashboard
+  // Every login = 1 return visit. Also restore if accidentally deleted from Admin.
   const updatedUser = {
     ...found,
     visitorHash,
