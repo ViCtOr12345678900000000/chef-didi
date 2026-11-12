@@ -1,8 +1,8 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Please try again." });
   const { text, goal } = req.body;
-  if (!text?.trim()) return res.status(400).json({ error: "No food text" });
-  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not set in Vercel. Add it in Settings > Environment Variables" });
+  if (!text?.trim()) return res.status(400).json({ error: "Please type what you ate." });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "Didi is resting right now. Please try again in a bit." });
 
   try {
     const prompt = `
@@ -34,18 +34,18 @@ Return JSON in this exact shape:
 
     const raw = await geminiRes.text();
     let data;
-    try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: "Didi could not read Gemini response. Check API key." }); }
-    if (!geminiRes.ok) return res.status(500).json({ error: data.error?.message || "Didi failed to calculate" });
+    try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: "I couldn't understand that food. Please try again." }); }
+    if (!geminiRes.ok) return res.status(500).json({ error: "I can't identify that food. Please try again." });
 
     let txt = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     // Extract JSON safely - find first { to last }
     const start = txt.indexOf("{");
     const end = txt.lastIndexOf("}");
-    if (start === -1 || end === -1) return res.status(500).json({ error: "Didi returned no calories. Try again." });
+    if (start === -1 || end === -1) return res.status(500).json({ error: "I can't identify that food. Please try again." });
     txt = txt.slice(start, end + 1);
 
     let parsed;
-    try { parsed = JSON.parse(txt); } catch { return res.status(500).json({ error: "Didi's answer was unclear. Try again." }); }
+    try { parsed = JSON.parse(txt); } catch { return res.status(500).json({ error: "I can't identify that food. Please try again." }); }
     return res.status(200).json({ items: parsed.items || [], totalKcal: parsed.totalKcal || 0, note: parsed.note || "" });
-  } catch (e) { return res.status(500).json({ error: "Didi error: " + (e.message || "Failed") }); }
+  } catch (e) { return res.status(500).json({ error: "Something went wrong. Please try again." }); }
 }
