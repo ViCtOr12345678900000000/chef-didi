@@ -23,11 +23,22 @@ export default function WeeklyPlan({ user, goal, sittings, customCalories, cuisi
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   };
 
+  const handleClearPlan = () => {
+    setPlan([]);
+    setOpen(false);
+    setErr("");
+  };
+
   return (
     <div className="bg-white rounded-[28px] p-5 md:p-6 shadow-xl mt-4">
-      <div className="flex items-center justify-between">
-        <div><h2 className="font-display font-light text-[20px]">📅 Pantry-first 3-Day Plan</h2><p className="text-[11px] text-stone-400">Uses what you already have: {pantry.slice(0,4).join(", ")}{pantry.length > 4 ? ` +${pantry.length-4} more` : ""} • Reuses Day 1 leftovers on Day 2</p></div>
-        <button onClick={generatePlan} disabled={loading} className={`h-11 px-5 rounded-full text-white font-bold text-[13px] bg-gradient-to-r ${theme.btn}`}>{loading ? "Planning..." : "Build My Plan"}</button>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1 min-w-0"><h2 className="font-display font-light text-[20px] leading-tight">📅 Pantry-first 3-Day Plan</h2><p className="text-[11px] text-stone-400">Uses what you already have: {pantry.slice(0,4).join(", ")}{pantry.length > 4 ? ` +${pantry.length-4} more` : ""} • Reuses Day 1 leftovers on Day 2</p></div>
+        <div className="flex gap-2 shrink-0">
+          {plan.length > 0 && (
+            <button onClick={handleClearPlan} className="h-11 px-4 rounded-full bg-white border text-[13px] font-bold">Clear</button>
+          )}
+          <button onClick={generatePlan} disabled={loading} className={`h-11 px-5 rounded-full text-white font-bold text-[13px] bg-gradient-to-r ${theme.btn}`}>{loading ? "Planning..." : plan.length > 0 ? "Rebuild Plan" : "Build My Plan"}</button>
+        </div>
       </div>
       {err && <p className="text-[12px] text-red-600 mt-3">{err}</p>}
       {open && plan.length > 0 && (
@@ -45,6 +56,9 @@ export default function WeeklyPlan({ user, goal, sittings, customCalories, cuisi
         </div>
       )}
       {open && !loading && plan.length === 0 && !err && <p className="text-[12px] text-stone-400 mt-3">Tap Build My Plan to generate from your pantry.</p>}
+      {plan.length > 0 && (
+        <button onClick={handleClearPlan} className="w-full mt-4 h-11 bg-white border rounded-full text-[13px] font-bold">Clear Plan</button>
+      )}
     </div>
   );
 }
