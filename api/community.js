@@ -12,9 +12,62 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const type = req.query.type || req.body?.type;
-  if (type !== "quests") return res.status(400).json({ error: "unknown type" });
 
   try {
+    // ---------- MARKET PRICES ----------
+    if (type === "market-prices") {
+      if (req.method === "GET") {
+        const location = req.query.location || "lagos";
+        const keys = await redis.keys(`didi:price:${location}:*`);
+        const prices = {};
+        const counts = {};
+        for (const k of keys) {
+          const item = k.split(":").slice(3).join(":");
+          const v = await redis.get(k);
+          if (v && typeof v === "object") {
+            prices[item] = Math.round(v.sum / Math.max(1, v.count));
+            counts[item] = v.count;
+          } else if (typeof v === "number") {
+            prices[item] = v;
+            counts[item] = 1;
+          }
+        }
+        return res.status(200).json({ prices, counts, location });
+      }
+
+      if (req.method === "POST") {
+        const { location = "lagos", item, price, email = "guest" } = req.body || {};
+        if (!item || !price) return res.status(400).json({ error: "item + price required" });
+
+        const cleanItem = String(item).toLowerCase().trim()
+          .replace(/^\d+\s*(g|kg|ml|tbsp|tsp|cup|medium|large|small)?\s*/i, "")
+          .split("(")[0].trim()
+          .slice(0, 60);
+        const amount = parseInt(String(price).replace(/[^0-9]/g, ""), 10);
+        if (!amount || amount <= 0) return res.status(400).json({ error: "invalid price" });
+
+        const key = `didi:price:${location}:${cleanItem}`;
+        const existing = await redis.get(key);
+        let sum = amount, count = 1;
+        if (existing && typeof existing === "object") {
+          sum = (existing.sum || 0) + amount;
+          count = (existing.count || 0) + 1;
+        } else if (typeof existing === "number") {
+          sum = existing + amount;
+          count = 2;
+        }
+        const average = Math.round(sum / count);
+        await redis.set(key, { sum, count, avg: average, lastBy: email, updatedAt: new Date().toISOString() });
+
+        return res.status(200).json({ ok: true, item: cleanItem, price: amount, average, count, location });
+      }
+
+      return res.status(405).json({ error: "method not allowed" });
+    }
+
+    // ---------- QUESTS ----------
+    if (type !== "quests") return res.status(400).json({ error: "unknown type" });
+
     if (req.method === "GET") {
       const location = req.query.location || "lagos";
       const keys = await redis.keys(`didi:quest:*:${location}`);
@@ -24,7 +77,6 @@ export default async function handler(req, res) {
         const v = await redis.get(k);
         counts[questId] = Number(v) || 0;
       }
-
       const joinKeys = await redis.keys(`didi:quest_join:*:${location}`);
       const joined = {};
       for (const k of joinKeys) {
@@ -38,7 +90,6 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const { action = "complete", questId, location = "lagos", email = "guest" } = req.body || {};
       if (!questId) return res.status(400).json({ error: "questId required" });
-
       if (action === "join") {
         const joinKey = `didi:quest_join:${questId}:${location}`;
         const joinedTotal = await redis.incr(joinKey);
@@ -51,7 +102,6 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({ ok: true, joinedTotal });
       }
-
       const key = `didi:quest:${questId}:${location}`;
       const total = await redis.incr(key);
       return res.status(200).json({ ok: true, totalCompletions: total });
@@ -60,6 +110,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "method not allowed" });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message || "Server error" });
   }
 }
