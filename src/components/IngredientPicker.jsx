@@ -5,7 +5,6 @@ import Footer from "./Footer";
 import SettingsBar from "./SettingsBar";
 import CalorieCalculator from "./CalorieCalculator";
 
-
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, savePrefs, caloriesFor, getFavourites, getHistory, getShopping, toggleShopping, clearShopping, getPantry, savePantry, addHistory, progressQuests } from "../lib/didi";
 const GOAL_ICONS = { normal: <UtensilsCrossed size={15} />, weightloss: <TrendingDown size={16} />, weightgain: <TrendingUp size={16} />, fit: <Dumbbell size={16} /> };
 
@@ -130,6 +129,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const onKcal = () => { setCloudVersion((v) => v + 1); syncCloud(); };
     const onMarket = () => { syncCloud(); };
     const onQuests = () => { syncCloud(); };
+    const onSyncNow = () => { sync(); syncCloud(); };
     window.addEventListener("didi-fav-updated", sync);
     window.addEventListener("didi-history-updated", sync);
     window.addEventListener("didi-shopping-updated", sync);
@@ -138,6 +138,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     window.addEventListener("didi-kcal-updated", onKcal);
     window.addEventListener("didi-market-updated", onMarket);
     window.addEventListener("didi-quests-updated", onQuests);
+    window.addEventListener("didi-sync-now", onSyncNow);
     return () => {
       window.removeEventListener("didi-fav-updated", sync);
       window.removeEventListener("didi-history-updated", sync);
@@ -147,6 +148,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       window.removeEventListener("didi-kcal-updated", onKcal);
       window.removeEventListener("didi-market-updated", onMarket);
       window.removeEventListener("didi-quests-updated", onQuests);
+      window.removeEventListener("didi-sync-now", onSyncNow);
     };
   }, [user?.email]);
 
@@ -159,12 +161,25 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
 
   const theme = THEMES[themeId] || THEMES.purple;
   const cal = caloriesFor(goal, sittings, customCalories);
-  const [ingPicker, setIngPicker] = useState([]);
+  const [ingPicker, setIngPicker] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("didi_active_ingredients") || "[]"); } catch { return []; }
+  });
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [recipe, setRecipe] = useState(null);
+  const [recipe, setRecipe] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("didi_persisted_recipe") || "null"); } catch { return null; }
+  });
   const [error, setError] = useState("");
   useEffect(() => { if (recipe?.title && user?.email) addHistory(user, recipe); }, [recipe?.title]);
+
+  // FIX: Persist recipe + ingredients so refresh does NOT wipe them. Only Clear wipes.
+  useEffect(() => {
+    try {
+      if (recipe) localStorage.setItem("didi_persisted_recipe", JSON.stringify(recipe));
+      localStorage.setItem("didi_active_ingredients", JSON.stringify(ingPicker));
+    } catch {}
+  }, [recipe, ingPicker]);
+
   const handleAdd = (ing) => setIngPicker(prev => prev.includes(ing) ? prev : [...prev, ing]);
   const addBtn = () => { if (!inputValue.trim()) return; handleAdd(inputValue.trim()); setInputValue(""); };
   const callAPI = async (exclude, extra = {}) => {
@@ -172,7 +187,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const data = await res.json(); if (!res.ok) throw new Error(data.error || "Failed"); return data.recipe;
   };
 
-  // ---------- SCROLL AS SOON AS MODAL DISAPPEARS - NOT AFTER RECIPE ----------
   const scrollAsSoonAsModalCloses = () => {
     if (window.innerWidth > 768) return;
     requestAnimationFrame(() => {
@@ -181,7 +195,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       }, 50);
     });
   };
-  // Kept for History / Generate Another clicks (no modal there)
   const scrollToRecipe = () => {
     if (window.innerWidth > 768) return;
     setTimeout(() => { document.getElementById("ai-response-box")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
@@ -194,9 +207,9 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       onRequireAuth?.();
       return;
     }
-    setRecipe(null); setError(""); setLastSurprise(null); setIsLoading(true);
+    setError(""); setLastSurprise(null); setIsLoading(true);
     scrollToRecipe();
-    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    try { const r = await callAPI(); setRecipe(r); bumpGuestCount(); trackQuestProgress(r?.title); syncCloud(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const lazyCaloriesFor = (lazyGoalValue, lazyMoodValue) => { const MAP = { weightloss: { light: 350, heavy: 500 }, normal: { light: 450, heavy: 650 }, fit: { light: 450, heavy: 650 }, weightgain: { light: 550, heavy: 800 } }; const perSitting = MAP[lazyGoalValue]?.[lazyMoodValue] ?? 450; return { perSitting, total: perSitting * sittings }; };
@@ -205,14 +218,14 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     if (isGuest && guestCount >= 2) { onRequireAuth?.(); return; }
     setError(""); setIsLoading(true);
     scrollToRecipe();
-    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } bumpGuestCount(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+    try { if (lastSurprise) { const lazyCal = lazyCaloriesFor(lastSurprise.mode, lastSurprise.mood); const r = await callAPI(recipe?.title, { ...lastSurprise, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] }); setRecipe(r); trackQuestProgress(r?.title); } else { const r = await callAPI(recipe?.title); setRecipe(r); trackQuestProgress(r?.title); } bumpGuestCount(); syncCloud(); } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
   const handleSurprise = async () => {
     if (needAuth()) return;
-    setShowLazy(false); // 1. Close modal FIRST
-    scrollAsSoonAsModalCloses(); // 2. Scroll IMMEDIATELY - while modal is disappearing, before API starts
-    setRecipe(null); setError(""); setIsLoading(true);
+    setShowLazy(false);
+    scrollAsSoonAsModalCloses();
+    setError(""); setIsLoading(true);
     try {
       const surpriseCuisine = lazyPlace === "nigerian" ? "nigerian" : "auto";
       const surpriseLocation = lazyPlace === "nigerian" ? "nigeria" : "abroad";
@@ -220,7 +233,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       const surprisePayload = { surprise: true, mood: lazyMood, mode: lazyGoal, cuisine: surpriseCuisine, location: surpriseLocation, caloriesPerSitting: lazyCal.perSitting, totalCalories: lazyCal.total, customCalories: lazyCal.total, ingredients: [] };
       setLastSurprise(surprisePayload); setGoal(lazyGoal);
       const r = await callAPI(null, surprisePayload);
-      setRecipe(r); trackQuestProgress(r?.title);
+      setRecipe(r); trackQuestProgress(r?.title); syncCloud();
     } catch (e) { setError(e.message); } finally { setIsLoading(false); }
   };
 
@@ -239,7 +252,6 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
     const items = leftoversText.split(",").map(s => s.trim()).filter(Boolean);
     const cleaned = items.map(i => i.replace(/^(Leftover|Old|Cooked|Boiled)\s+/i, "").trim());
     setIngPicker(cleaned);
-    setRecipe(null);
     try {
       const { newlyCompleted } = progressQuests(user, "Zero Waste Hero");
       if (newlyCompleted.length) {
@@ -249,6 +261,16 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
       }
     } catch {}
     setTimeout(() => { document.getElementById("find-meal-btn")?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 200);
+  };
+
+  const handleClearAll = () => {
+    setRecipe(null);
+    setIngPicker([]);
+    setLastSurprise(null);
+    try {
+      localStorage.removeItem("didi_persisted_recipe");
+      localStorage.removeItem("didi_active_ingredients");
+    } catch {}
   };
 
   return (
@@ -305,13 +327,11 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
         </div>
         <div id="ai-response-box" className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1 scroll-mt-4">
           {isLoading && <div className="bg-white rounded-[28px] p-6 shadow-xl animate-pulse"><p className="text-center text-[12px] font-bold text-stone-400">👩🏾‍🍳 Cooking up your recipe...</p></div>}
-          {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={() => { setRecipe(null); setIngPicker([]); setLastSurprise(null); }} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} location={location} />}
+          {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={handleClearAll} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} location={location} />}
           {error && !isLoading && <div className="bg-white rounded-[24px] p-5 text-center text-[13px] text-red-600 font-semibold">{error}</div>}
           {!recipe && !isLoading && (<div className="bg-white rounded-[28px] p-6 shadow-xl"><div className={`${theme.softBg} border border-dashed ${theme.softBorder} rounded-2xl py-8 text-center`}><p className="text-[28px]">🍲</p><p className="text-[14px] font-semibold text-stone-600">Your recipe will appear here.</p><p className="text-[12px] text-stone-400">Pick ingredients → Choose goal → Find Meal</p></div></div>)}
         </div>
       </div>
-     
-      
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-6 mt-4">
         <div className="bg-white rounded-[24px] p-4 shadow-xl flex flex-wrap gap-2">
           <button onClick={() => { if (needAuth()) return; setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showFav ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <Heart size={14} />} Favourites {isGuest ? "🔒" : `(${favList.length})`}</button>
