@@ -71,12 +71,18 @@ export default function AdminDashboard() {
     setPage(1);
   }, [activeTab, search, selectedCountry, showBots]);
 
-  // Visitor processing
+  // Visitor processing (sorted recent to oldest)
   const allVisitors = useMemo(() => {
-    return (data.visitors || []).map(v => ({
-      ...v,
-      country: normalizeCountry(v.country),
-    }));
+    return (data.visitors || [])
+      .map(v => ({
+        ...v,
+        country: normalizeCountry(v.country),
+      }))
+      .sort((a, b) => {
+        const timeA = new Date(a.time || a.createdAt || 0).getTime();
+        const timeB = new Date(b.time || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
   }, [data.visitors]);
 
   const realVisitors = useMemo(() => {
