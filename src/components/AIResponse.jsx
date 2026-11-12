@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check, Copy, MessageCircle, Pause, Play, Sparkles } from "lucide-react";
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 import { getDiasporaSwap } from "../lib/translator";
-import CostEstimator from "./CostEstimator";
 import DiasporaTranslator from "./DiasporaTranslator";
 
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
@@ -137,7 +136,7 @@ export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, s
         )}
       </div>
 
-      <CostEstimator recipe={{ ...recipe, ingredients: allIngredients }} location={location} themeId={themeId} user={user} />
+      
       <DiasporaTranslator recipe={{ ...recipe, ingredients: allIngredients }} />
 
       <p className="font-bold text-[13px] mb-2 mt-4">Steps <span className="text-[11px] font-normal text-stone-400">— tap timer to pause</span></p>
