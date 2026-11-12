@@ -15,7 +15,8 @@ import {
   Sparkles,
   TrendingUp,
   Activity,
-  Layers
+  Layers,
+  Flame
 } from "lucide-react";
 
 const PAGE_SIZE = 15;
@@ -41,9 +42,10 @@ function isOldBot(v) {
 
 export default function AdminDashboard() {
   const [data, setData] = useState({ visitors: [], users: [], reviews: [] });
-  const [activeTab, setActiveTab] = useState("visitors"); // visitors | users | reviews
+  const [activeTab, setActiveTab] = useState("visitors");
   const [search, setSearch] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("all");
+  const [onlyReturning, setOnlyReturning] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showBots, setShowBots] = useState(false);
@@ -72,14 +74,27 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setPage(1);
-  }, [activeTab, search, selectedCountry, showBots]);
+  }, [activeTab, search, selectedCountry, showBots, onlyReturning]);
 
-  // Visitor processing (sorted recent to oldest)
+  // Process visitors, sort recent to oldest, and calculate total visits per person
   const allVisitors = useMemo(() => {
-    return (data.visitors || [])
+    const raw = (data.visitors || []).map(v => ({
+      ...v,
+      country: normalizeCountry(v.country),
+    }));
+
+    // Count occurrences of each visitorHash
+    const hashCounts = {};
+    raw.forEach(v => {
+      if (v.visitorHash) {
+        hashCounts[v.visitorHash] = Math.max(hashCounts[v.visitorHash] || 0, v.visitNumber || 1);
+      }
+    });
+
+    return raw
       .map(v => ({
         ...v,
-        country: normalizeCountry(v.country),
+        totalVisits: v.visitorHash ? Math.max(hashCounts[v.visitorHash] || 1, v.visitNumber || 1) : (v.visitNumber || 1),
       }))
       .sort((a, b) => {
         const timeA = new Date(a.time || a.createdAt || 0).getTime();
@@ -94,6 +109,17 @@ export default function AdminDashboard() {
 
   const hiddenBotCount = allVisitors.length - realVisitors.length;
 
+  // Count unique returning visitors (2+ visits)
+  const returningVisitorsCount = useMemo(() => {
+    const uniqueReturningHashes = new Set();
+    realVisitors.forEach(v => {
+      if (v.totalVisits > 1 && v.visitorHash) {
+        uniqueReturningHashes.add(v.visitorHash);
+      }
+    });
+    return uniqueReturningHashes.size;
+  }, [realVisitors]);
+
   // Country Aggregation
   const countries = useMemo(() => {
     const map = {};
@@ -104,7 +130,7 @@ export default function AdminDashboard() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [realVisitors]);
 
-  // Top Regions Breakdown for custom visual progress bars
+  // Top Regions Breakdown
   const topCountries = useMemo(() => {
     const maxCount = countries.length > 0 ? countries[0][1] : 1;
     return countries.slice(0, 5).map(([name, count]) => ({
@@ -118,10 +144,11 @@ export default function AdminDashboard() {
   const filteredVisitors = useMemo(() => {
     return realVisitors.filter(v => {
       if (selectedCountry !== "all" && v.country !== selectedCountry) return false;
-      if (search && !`${v.city} ${v.country} ${v.device}`.toLowerCase().includes(search.toLowerCase())) return false;
+      if (onlyReturning && v.totalVisits < 2) return false;
+      if (search && !`${v.city} ${v.country} ${v.device} ${v.visitorHash || ""}`.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [realVisitors, search, selectedCountry]);
+  }, [realVisitors, search, selectedCountry, onlyReturning]);
 
   const filteredUsers = useMemo(() => {
     if (!search) return data.users;
@@ -178,7 +205,7 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 bg-zinc-900/90 border border-zinc-800 px-3 py-2 rounded-xl text-xs text-zinc-400">
             <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>System Status: <strong className="text-emerald-400 font-medium">Operational</strong></span>
+            <span>Upstash Redis: <strong className="text-emerald-400 font-medium">Connected</strong></span>
           </div>
           <button
             onClick={fetchData}
@@ -194,9 +221,9 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md">
             <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Live Visitors</span>
+              <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Total Page Views</span>
               <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
                 <Eye className="w-4 h-4" />
               </div>
@@ -204,27 +231,27 @@ export default function AdminDashboard() {
             <div className="text-3xl font-bold tracking-tight text-white">{realVisitors.length}</div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-emerald-400 font-semibold flex items-center">
-                <TrendingUp className="w-3 h-3 mr-0.5" /> Active
+                <TrendingUp className="w-3 h-3 mr-0.5" /> Clean
               </span>
-              <span>• {hiddenBotCount} crawler visits filtered</span>
+              <span>• {hiddenBotCount} bots excluded</span>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md">
             <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Global Regions</span>
-              <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
-                <Globe className="w-4 h-4" />
+              <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Repeat Visitors</span>
+              <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/20 text-rose-400">
+                <Flame className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-3xl font-bold tracking-tight text-white">{countries.length}</div>
+            <div className="text-3xl font-bold tracking-tight text-white">{returningVisitorsCount}</div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
-              <span className="text-blue-400 font-semibold">Countries Reach</span>
-              <span>• International footprint</span>
+              <span className="text-rose-400 font-semibold">High Interest</span>
+              <span>• Visited 2+ times</span>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md">
             <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Registered Users</span>
               <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20 text-violet-400">
@@ -234,11 +261,11 @@ export default function AdminDashboard() {
             <div className="text-3xl font-bold tracking-tight text-white">{data.users.length}</div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-violet-400 font-semibold">Signups</span>
-              <span>• Verified profiles</span>
+              <span>• Verified accounts</span>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md">
             <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">User Feedback</span>
               <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
@@ -248,14 +275,13 @@ export default function AdminDashboard() {
             <div className="text-3xl font-bold tracking-tight text-white">{data.reviews.length}</div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-amber-400 font-semibold">Reviews</span>
-              <span>• Customer satisfaction</span>
+              <span>• {countries.length} countries reached</span>
             </div>
           </div>
         </div>
 
-        {/* Custom Professional Analytics Breakdown Panels */}
+        {/* Analytics Breakdown Panels */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Regions Progress Bar breakdown */}
           <div className="bg-zinc-900/70 border border-zinc-800/80 p-6 rounded-2xl shadow-xl backdrop-blur-md space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -273,7 +299,7 @@ export default function AdminDashboard() {
                 <div key={index} className="space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="font-medium text-zinc-300">{item.name}</span>
-                    <span className="text-zinc-400 font-mono">{item.count} visitors</span>
+                    <span className="text-zinc-400 font-mono">{item.count} hits</span>
                   </div>
                   <div className="w-full bg-zinc-800/80 h-2 rounded-full overflow-hidden">
                     <div 
@@ -289,7 +315,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Quick System Overview Panel */}
           <div className="bg-zinc-900/70 border border-zinc-800/80 p-6 rounded-2xl shadow-xl backdrop-blur-md flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -297,8 +322,8 @@ export default function AdminDashboard() {
                   <Activity className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-200">Dashboard Metrics Health</h3>
-                  <p className="text-[11px] text-zinc-500">Real-time filtering & synchronization overview</p>
+                  <h3 className="text-sm font-bold text-zinc-200">Engagement & Retention Health</h3>
+                  <p className="text-[11px] text-zinc-500">Server-side IP + User-Agent fingerprint tracking</p>
                 </div>
               </div>
               <div className="space-y-3 pt-2 text-xs">
@@ -307,37 +332,50 @@ export default function AdminDashboard() {
                   <span className="font-mono font-bold text-white">{allVisitors.length}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-zinc-800/60">
-                  <span className="text-zinc-400">Datacenter / Crawler Bots Filtered</span>
-                  <span className="font-mono font-bold text-amber-400">{hiddenBotCount}</span>
+                  <span className="text-zinc-400">Returning Interested People (2+ visits)</span>
+                  <span className="font-mono font-bold text-rose-400">{returningVisitorsCount}</span>
                 </div>
                 <div className="flex justify-between py-2">
-                  <span className="text-zinc-400">Verified Human-Like Traffic</span>
-                  <span className="font-mono font-bold text-emerald-400">{realVisitors.length}</span>
+                  <span className="text-zinc-400">Filtered Crawler / Datacenter Logs</span>
+                  <span className="font-mono font-bold text-amber-400">{hiddenBotCount}</span>
                 </div>
               </div>
             </div>
             <div className="pt-4 mt-4 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
-              <span>Environment: Vercel Serverless</span>
-              <span className="text-violet-400 font-medium">Secure API Mode</span>
+              <span>Fingerprinting: SHA-256 (No LocalStorage)</span>
+              <span className="text-emerald-400 font-medium">Privacy Safe</span>
             </div>
           </div>
         </div>
 
-        {/* Country Quick Filter Bar */}
+        {/* Country & Intent Quick Filter Bar */}
         {activeTab === "visitors" && (
           <div className="bg-zinc-900/50 border border-zinc-800/80 p-4 rounded-2xl space-y-3 backdrop-blur-md">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-violet-400" />
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">Filter Traffic by Region</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">Filter Traffic</span>
               </div>
-              <button
-                onClick={() => setShowBots(!showBots)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300 hover:text-white bg-zinc-800/90 px-3.5 py-1.5 rounded-full border border-zinc-700/60 shadow-sm transition"
-              >
-                <ShieldAlert className="w-3 h-3 text-amber-400" />
-                <span>{showBots ? "Hide Datacenter Traffic" : `Audit ${hiddenBotCount} Filtered Bots`}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOnlyReturning(!onlyReturning)}
+                  className={`flex items-center gap-1.5 text-[11px] font-semibold px-3.5 py-1.5 rounded-full border transition ${
+                    onlyReturning 
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/40" 
+                      : "bg-zinc-800/90 text-zinc-300 hover:text-white border-zinc-700/60"
+                  }`}
+                >
+                  <Flame className="w-3 h-3 text-rose-400" />
+                  <span>{onlyReturning ? "Showing Repeat Visitors Only" : "Filter Repeat Visitors (2+)"}</span>
+                </button>
+                <button
+                  onClick={() => setShowBots(!showBots)}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300 hover:text-white bg-zinc-800/90 px-3.5 py-1.5 rounded-full border border-zinc-700/60 shadow-sm transition"
+                >
+                  <ShieldAlert className="w-3 h-3 text-amber-400" />
+                  <span>{showBots ? "Hide Datacenter Traffic" : `Audit ${hiddenBotCount} Filtered Bots`}</span>
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
               <button
@@ -400,7 +438,7 @@ export default function AdminDashboard() {
               onChange={e => setSearch(e.target.value)}
               placeholder={
                 activeTab === "visitors"
-                  ? "Search city, country, device..."
+                  ? "Search city, country, device, or visitor ID..."
                   : activeTab === "users"
                   ? "Search user name or email..."
                   : "Search review text or author..."
@@ -426,10 +464,16 @@ export default function AdminDashboard() {
                 pageItems.map((v, idx) => (
                   <div key={idx} className="p-4 sm:px-6 flex items-center justify-between hover:bg-zinc-800/40 transition">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-sm text-zinc-100">
                           {v.city}, {v.country}
                         </span>
+                        {v.totalVisits > 1 && (
+                          <span className="bg-rose-500/15 text-rose-400 border border-rose-500/30 text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <Flame className="w-2.5 h-2.5" />
+                            Returning • {v.totalVisits}x visits
+                          </span>
+                        )}
                         {isOldBot(v) && (
                           <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-full font-bold">
                             Bot Log
@@ -441,6 +485,11 @@ export default function AdminDashboard() {
                           <Smartphone className="w-3.5 h-3.5 text-zinc-500" />
                           {v.device || "Unknown Device"}
                         </span>
+                        {v.visitorHash && (
+                          <span className="text-[11px] font-mono text-zinc-500 bg-zinc-800/80 px-2 py-0.5 rounded">
+                            ID: {v.visitorHash}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
