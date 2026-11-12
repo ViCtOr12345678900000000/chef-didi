@@ -54,36 +54,35 @@ export default async function handler(req, res) {
     const countData = await countRes.json();
     const visitNumber = countData.result || 1;
 
-    // 7. Check if this visitor is a registered user and increment their personal visit count
-    const usersRes = await fetch(`${url}/get/users`, { headers });
+    // 7. Match visitorHash against registered users in Redis List and increment visitCount
+    const usersRes = await fetch(`${url}/lrange/users/0/-1`, { headers });
     const usersJson = await usersRes.json();
-    let usersList = [];
-    if (usersJson.result) {
-      try {
-        usersList = typeof usersJson.result === "string" ? JSON.parse(usersJson.result) : usersJson.result;
-      } catch (e) {
-        usersList = [];
-      }
-    }
+    if (Array.isArray(usersJson.result) && usersJson.result.length > 0) {
+      let userUpdated = false;
+      const updatedUsers = [];
 
-    // Check if any registered user matches a cookie identifier or email stored, 
-    // or increment active session track counts for returning registered accounts
-    let userUpdated = false;
-    usersList = usersList.map(u => {
-      // If user session matches visitorHash or session fingerprint
-      if (u.visitorHash === visitorHash || (u.cookieId && u.cookieId === visitorHash)) {
-        u.visitCount = (u.visitCount || 0) + 1;
-        userUpdated = true;
+      for (const item of usersJson.result) {
+        try {
+          let s = typeof item === "string" ? item : JSON.stringify(item);
+          try { s = decodeURIComponent(s); } catch {}
+          const u = JSON.parse(s);
+          if (u && typeof u === "object") {
+            if (u.visitorHash === visitorHash || (u.cookieId && u.cookieId === visitorHash)) {
+              u.visitCount = (u.visitCount || 0) + 1;
+              u.lastSeen = new Date().toISOString();
+              userUpdated = true;
+            }
+            updatedUsers.push(u);
+          }
+        } catch {}
       }
-      return u;
-    });
 
-    if (userUpdated) {
-      await fetch(`${url}/set/users`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(usersList)
-      });
+      if (userUpdated) {
+        await fetch(`${url}/del/users`, { headers });
+        for (const u of updatedUsers) {
+          await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify(u))}`, { headers });
+        }
+      }
     }
 
     const rawCountry = req.headers["x-vercel-ip-country"] ? decodeURIComponent(req.headers["x-vercel-ip-country"]) : "Unknown";
