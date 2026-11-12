@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         .slice(0, 10);
     }
 
-    // 5. Set / refresh the 1-year HttpOnly cookie so location/network changes stay linked
+    // 5. Set / refresh the 1-year HttpOnly cookie
     res.setHeader(
       "Set-Cookie",
       `vid=${visitorHash}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`
@@ -53,6 +53,38 @@ export default async function handler(req, res) {
     const countRes = await fetch(`${url}/hincrby/visitor_hits/${visitorHash}/1`, { headers });
     const countData = await countRes.json();
     const visitNumber = countData.result || 1;
+
+    // 7. Check if this visitor is a registered user and increment their personal visit count
+    const usersRes = await fetch(`${url}/get/users`, { headers });
+    const usersJson = await usersRes.json();
+    let usersList = [];
+    if (usersJson.result) {
+      try {
+        usersList = typeof usersJson.result === "string" ? JSON.parse(usersJson.result) : usersJson.result;
+      } catch (e) {
+        usersList = [];
+      }
+    }
+
+    // Check if any registered user matches a cookie identifier or email stored, 
+    // or increment active session track counts for returning registered accounts
+    let userUpdated = false;
+    usersList = usersList.map(u => {
+      // If user session matches visitorHash or session fingerprint
+      if (u.visitorHash === visitorHash || (u.cookieId && u.cookieId === visitorHash)) {
+        u.visitCount = (u.visitCount || 0) + 1;
+        userUpdated = true;
+      }
+      return u;
+    });
+
+    if (userUpdated) {
+      await fetch(`${url}/set/users`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(usersList)
+      });
+    }
 
     const rawCountry = req.headers["x-vercel-ip-country"] ? decodeURIComponent(req.headers["x-vercel-ip-country"]) : "Unknown";
     const COUNTRY_MAP = { NG: "Nigeria", US: "United States", GB: "United Kingdom", UK: "United Kingdom", GH: "Ghana", KE: "Kenya", ZA: "South Africa", CA: "Canada", AU: "Australia", DE: "Germany" };
