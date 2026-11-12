@@ -12,8 +12,6 @@ import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/di
 
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 mins
 
-// ============ PREVIEW COMPONENTS (Locked for users, real logic in #testing) ============
-
 function BudgetPreview({ theme, onGoTesting }) {
   return (
     <div className="px-4 max-w-[600px] mx-auto">
@@ -42,12 +40,10 @@ function OrderPreview({ theme }) {
         <p className="text-xs text-stone-500">Jollof ₦3,500 • Egusi + Semo ₦4,000</p>
         <a href="https://wa.me/2348000000000?text=Hi%20Mama%20T%2C%20I%20want%20to%20order%20Jollof" target="_blank" className="block text-center mt-3 bg-green-600 text-white font-bold py-3 rounded-xl text-sm">Order on WhatsApp →</a>
       </div>
-      <p className="text-xs text-stone-400 mt-3 text-center">Full vendor list lives in #testing for now. We move it here when ready.</p>
+      <p className="text-xs text-stone-400 mt-3 text-center">Full vendor list lives in #testing for now.</p>
     </div>
   );
 }
-
-// ============ MAIN APP ============
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -58,7 +54,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [lockedMsg, setLockedMsg] = useState('');
 
-  // 🔒 LOCKED FOR USERS - Change to [] to unlock when ready
+  // 🔒 FINAL LOCK RULE - Cook is NOT here, so Cook stays UNLOCKED
+  // Home ✅ | Cook ✅ (main site) | Budget 🔒 | Order 🔒 | More ✅
   const LOCKED_TABS = ['budget', 'order'];
 
   const handleTabClick = (tabId) => {
@@ -192,7 +189,7 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
-  // Secret Hidden Routes
+  // Secret Hidden Routes - #testing stays OPEN for us
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') return <Advertise />;
   if (typeof window !== 'undefined' && window.location.hash === '#my-number') return <AdminDashboard />;
   if (typeof window !== 'undefined' && window.location.hash === '#testing') return <Testing />;
@@ -236,18 +233,21 @@ export default function App() {
 
       {activeTab === 'home' && (
         <div className="px-4 max-w-[600px] mx-auto space-y-3">
+          {/* Cook - OPEN - Main Site */}
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
             <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl">🍲</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Cook With What I Have</p><p className="text-stone-500 text-[13px]">Enter ingredients → Get recipe</p></div>
             <span>→</span>
           </button>
 
+          {/* Budget - LOCKED */}
           <button onClick={() => handleTabClick('budget')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
             <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center text-2xl">💰</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Cook With ₦5k</p><p className="text-stone-500 text-[13px]">See today's prices in your market</p></div>
             <span className="text-[11px] bg-stone-800 text-white px-2.5 py-1 rounded-full font-bold">🔒 SOON</span>
           </button>
 
+          {/* Order - LOCKED */}
           <button onClick={() => handleTabClick('order')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
             <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-2xl">🛵</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Order Food Near Me</p><p className="text-stone-500 text-[13px]">Too lazy? Order from home cooks</p></div>
@@ -281,7 +281,7 @@ export default function App() {
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">❤️ Favourites & History <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
           <div className="bg-stone-50 rounded-2xl p-4 text-sm">
             <p className="font-bold">Settings</p>
-            <p className="text-stone-500 text-xs mt-1">Goal, Theme, Language — change them inside Cook tab. We will move them here fully next.</p>
+            <p className="text-stone-500 text-xs mt-1">Goal, Theme, Language — change them inside Cook tab.</p>
           </div>
         </div>
       )}
@@ -292,6 +292,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ===== FOOTER - Cook UNLOCKED, leads to main site ===== */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-40">
         <div className="max-w-[600px] mx-auto flex justify-around py-2 px-2">
           {TABS.map(tab => {
