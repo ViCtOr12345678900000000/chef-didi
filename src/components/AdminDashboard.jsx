@@ -76,26 +76,38 @@ export default function AdminDashboard() {
     setPage(1);
   }, [activeTab, search, selectedCountry, showBots, onlyReturning]);
 
-  // Process visitors, sort recent to oldest, and calculate total visits per person
+  // Process visitors, sort recent to oldest, and calculate total visits & cities per visitorHash
   const allVisitors = useMemo(() => {
     const raw = (data.visitors || []).map(v => ({
       ...v,
       country: normalizeCountry(v.country),
     }));
 
-    // Count occurrences of each visitorHash
-    const hashCounts = {};
+    const hashStats = {};
     raw.forEach(v => {
       if (v.visitorHash) {
-        hashCounts[v.visitorHash] = Math.max(hashCounts[v.visitorHash] || 0, v.visitNumber || 1);
+        if (!hashStats[v.visitorHash]) {
+          hashStats[v.visitorHash] = { maxVisits: 1, cities: new Set() };
+        }
+        hashStats[v.visitorHash].maxVisits = Math.max(
+          hashStats[v.visitorHash].maxVisits,
+          v.visitNumber || 1
+        );
+        if (v.city && v.city !== "Unknown") {
+          hashStats[v.visitorHash].cities.add(v.city);
+        }
       }
     });
 
     return raw
-      .map(v => ({
-        ...v,
-        totalVisits: v.visitorHash ? Math.max(hashCounts[v.visitorHash] || 1, v.visitNumber || 1) : (v.visitNumber || 1),
-      }))
+      .map(v => {
+        const stats = v.visitorHash ? hashStats[v.visitorHash] : null;
+        return {
+          ...v,
+          totalVisits: stats ? stats.maxVisits : (v.visitNumber || 1),
+          uniqueCities: stats ? Array.from(stats.cities) : [],
+        };
+      })
       .sort((a, b) => {
         const timeA = new Date(a.time || a.createdAt || 0).getTime();
         const timeB = new Date(b.time || b.createdAt || 0).getTime();
@@ -323,7 +335,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-zinc-200">Engagement & Retention Health</h3>
-                  <p className="text-[11px] text-zinc-500">Server-side IP + User-Agent fingerprint tracking</p>
+                  <p className="text-[11px] text-zinc-500">Cross-location HttpOnly cookie & fingerprint tracking</p>
                 </div>
               </div>
               <div className="space-y-3 pt-2 text-xs">
@@ -342,8 +354,8 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="pt-4 mt-4 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
-              <span>Fingerprinting: SHA-256 (No LocalStorage)</span>
-              <span className="text-emerald-400 font-medium">Privacy Safe</span>
+              <span>Tracking: HttpOnly Cookie + SHA-256</span>
+              <span className="text-emerald-400 font-medium">Cross-City Active</span>
             </div>
           </div>
         </div>
@@ -474,21 +486,30 @@ export default function AdminDashboard() {
                             Returning • {v.totalVisits}x visits
                           </span>
                         )}
+                        {v.uniqueCities && v.uniqueCities.length > 1 && (
+                          <span className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[10px] px-2 py-0.5 rounded-full font-semibold">
+                            {v.uniqueCities.length} cities
+                          </span>
+                        )}
                         {isOldBot(v) && (
                           <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-full font-bold">
                             Bot Log
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-zinc-400">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
                         <span className="flex items-center gap-1.5">
                           <Smartphone className="w-3.5 h-3.5 text-zinc-500" />
                           {v.device || "Unknown Device"}
                         </span>
                         {v.visitorHash && (
-                          <span className="text-[11px] font-mono text-zinc-500 bg-zinc-800/80 px-2 py-0.5 rounded">
+                          <button
+                            onClick={() => setSearch(v.visitorHash)}
+                            className="text-[11px] font-mono text-zinc-400 hover:text-violet-400 bg-zinc-800/80 px-2 py-0.5 rounded transition"
+                            title="Click to filter all visits by this user"
+                          >
                             ID: {v.visitorHash}
-                          </span>
+                          </button>
                         )}
                       </div>
                     </div>
