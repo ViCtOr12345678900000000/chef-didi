@@ -141,7 +141,7 @@ export default function App() {
       </div>
       <IngredientPicker user={user} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} onRequireAuth={() => setShowAuth(true)} />
       <AdSlot slot="1111111111" />
-      <Footer user={user} themeId={themeId} lang={lang} />
+      
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
       <p className="relative text-center text-[11px] text-stone-300 mt-10 pb-2">Made with 💜• © 2026 Didi • Cook what you have</p>
     </div>
