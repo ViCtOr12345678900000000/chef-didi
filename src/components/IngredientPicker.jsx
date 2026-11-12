@@ -315,10 +315,44 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
           <div className="flex items-center gap-2.5 mb-5"><span className={`w-9 h-9 rounded-full bg-gradient-to-br ${theme.btn} text-white flex items-center justify-center shadow-md`}>1</span><h2 className="font-display font-light text-[21px]">{t(lang, 'add')}</h2><span className={`ml-auto text-[10px] font-bold bg-gradient-to-r ${theme.btn} text-white px-2 py-1 rounded-full`}>FRESH</span></div>
           <div className="flex gap-2 mb-5"><input value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && addBtn()} placeholder="e.g. Chicken, Rice, Tomato..." className={`flex-1 min-w-0 h-12 px-4 ${theme.softBg} border ${theme.softBorder} rounded-full text-[14px] outline-none ${theme.focus}`} /><button onClick={addBtn} className={`shrink-0 h-12 w-12 flex items-center justify-center bg-gradient-to-br ${theme.btn} text-white rounded-full shadow-lg`}><PlusCircleIcon size={22} /></button></div>
           <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-3">Quick add</p>
-          <div className="flex flex-wrap gap-2">{['Rice', 'Chicken', 'Eggs', 'Tomato', 'Onion', 'Garlic', 'Pasta', 'Cheese', 'Beans', 'Plantain', 'Yam', 'Pepper', 'Potato', 'Beef', 'Oil', 'Salt', 'Fettuccine', 'Heavy Cream', 'Parmesan', 'Butter'].map(item => (<button key={item} onClick={() => handleAdd(item)} className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition ${theme.soft} ${theme.hover} hover:text-white`}>+ {item}</button>))}</div>
+          <div className="flex flex-wrap gap-2">
+            {['Rice', 'Chicken', 'Eggs', 'Tomato', 'Onion', 'Garlic', 'Pasta', 'Cheese', 'Beans', 'Plantain', 'Yam', 'Pepper', 'Potato', 'Beef', 'Oil', 'Salt', 'Fettuccine', 'Heavy Cream', 'Parmesan', 'Butter'].map(item => {
+              const selected = ingPicker.includes(item);
+              return (
+                <button
+                  key={item}
+                  onClick={() => handleAdd(item)}
+                  className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition flex items-center gap-1.5 ${
+                    selected
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                      : `${theme.soft} ${theme.hover} hover:text-white`
+                  }`}
+                >
+                  {selected ? <Check size={13} /> : "+"} {item}
+                </button>
+              );
+            })}
+          </div>
           <div className="mt-4">
             <p className="text-[11px] font-bold tracking-wider text-stone-400 uppercase mb-2">My Pantry — always at home {isGuest && "🔒"}</p>
-            <div className="flex flex-wrap gap-1.5">{pantry.map(p => (<button key={p} onClick={() => handleAdd(p)} className="text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">+ {p}</button>))}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {pantry.map(p => {
+                const selected = ingPicker.includes(p);
+                return (
+                  <button
+                    key={p}
+                    onClick={() => handleAdd(p)}
+                    className={`text-[11px] font-bold border px-2.5 py-1 rounded-full flex items-center gap-1 ${
+                      selected
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                        : "bg-green-50 text-green-700 border-green-200"
+                    }`}
+                  >
+                    {selected ? <Check size={11} /> : "+"} {p}
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex gap-1.5 mt-2"><input value={pantryInput} onChange={e => setPantryInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addPantryItem(); }} placeholder={isGuest ? "Login to add to pantry 🔒" : "Add to pantry e.g. Maggi"} className="flex-1 h-9 px-3 bg-stone-50 border rounded-full text-[12px] outline-none" /><button onClick={addPantryItem} className="h-9 px-3 bg-green-600 text-white rounded-full text-[12px] font-bold">Add</button></div>
           </div>
           <button onClick={() => { if (needAuth()) return; setLazyGoal(goal); setShowLazy(true); }} className={`w-full mt-5 h-12 rounded-full bg-gradient-to-r ${theme.btn} text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition`}><MoonStar size={16} /> Cook For Me {isGuest && <Lock size={13} />} <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full flex items-center gap-1"><Sparkles size={11} /> Lazy Mode</span></button>
