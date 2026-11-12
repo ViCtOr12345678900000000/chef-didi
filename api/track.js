@@ -5,19 +5,25 @@ export default async function handler(req, res) {
     const ua = String(req.headers["user-agent"] || "");
     const uaLow = ua.toLowerCase();
 
-    // 1. Filter bot user-agents
+    // FIX 1: Only block REAL crawlers, not in-app browsers.
+    // Real crawlers don't have Mozilla + iphone/android/windows in them.
+    // WhatsApp / Instagram / Facebook in-app browsers DO, so let them through.
+    const isRealBrowser = uaLow.includes("mozilla") && /iphone|android|windows|macintosh|ipad/.test(uaLow);
+    
     const isBotUA =
-      /bot|crawler|spider|vercel|uptimerobot|pingdom|headless|preview|facebookexternalhit|whatsapp|telegrambot|googlebot|bingbot|ahrefs|semrush|mj12bot|dotbot|petalbot|bytespider|gptbot|claudebot|anthropic|amazonbot|applebot|yandex|baidu/i.test(
-        uaLow
-      );
-    if (isBotUA) return res.status(200).json({ ok: true, skipped: "bot-ua" });
+      /googlebot|bingbot|ahrefs|semrush|mj12bot|dotbot|petalbot|bytespider|gptbot|claudebot|anthropic|amazonbot|applebot|yandex|baidu|headless|uptimerobot|pingdom/i.test(uaLow);
 
-    // 2. Reject non-browser agents
+    // Block only if it's a bot AND not a real browser
+    if (isBotUA && !isRealBrowser) {
+      return res.status(200).json({ ok: true, skipped: "bot-ua" });
+    }
+
+    // Reject non-browser agents (pure crawlers, curl, etc)
     if (!ua || ua.length < 20 || !uaLow.includes("mozilla")) {
       return res.status(200).json({ ok: true, skipped: "no-browser" });
     }
 
-    // 3. Filter Vercel datacenter IPs
+    // FIX 2: Don't block datacenter cities if it's a real phone
     const rawCity = req.headers["x-vercel-ip-city"]
       ? decodeURIComponent(req.headers["x-vercel-ip-city"])
       : "Unknown";
@@ -35,8 +41,7 @@ export default async function handler(req, res) {
       "frankfurt am main",
     ];
     const isDatacenter = datacenterCities.some((c) => rawCity.toLowerCase().includes(c));
-    const looksLikeRealBrowser = /iphone|android|windows|macintosh|ipad/.test(uaLow);
-    if (isDatacenter && !looksLikeRealBrowser) {
+    if (isDatacenter && !isRealBrowser) {
       return res.status(200).json({ ok: true, skipped: "datacenter" });
     }
 
@@ -44,8 +49,6 @@ export default async function handler(req, res) {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     const headers = { Authorization: `Bearer ${token}` };
 
-    // 4. Read existing 'vid' cookie OR generate new visitor fingerprint
-    // This re-uses the same vid from login.js, so a returning user is the same visitor
     const cookieHeader = String(req.headers.cookie || "");
     const cookieMatch = cookieHeader.match(/(?:^|;\s*)vid=(v_[a-f0-9]{10})/);
 
@@ -56,22 +59,22 @@ export default async function handler(req, res) {
       const ip = (req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "unknown-ip")
         .split(",")[0]
         .trim();
+      // FIX 3: Don't use Date.now() here - same person without cookie
+      // would get a new ID every single time. Use IP + UA only.
       visitorHash =
         "v_" +
         crypto
           .createHash("sha256")
-          .update(`${ip}-${ua}-${Date.now()}`)
+          .update(`${ip}-${ua}`)
           .digest("hex")
           .slice(0, 10);
     }
 
-    // 5. Set / refresh the 1-year HttpOnly cookie
     res.setHeader(
       "Set-Cookie",
       `vid=${visitorHash}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`
     );
 
-    // 6. Increment this specific visitor's hit count in Upstash Redis
     const countRes = await fetch(`${url}/hincrby/visitor_hits/${visitorHash}/1`, { headers });
     const countData = await countRes.json();
     const visitNumber = countData.result || 1;
