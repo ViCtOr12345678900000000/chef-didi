@@ -70,12 +70,15 @@ export default async function handler(req, res) {
 
   let allUsers = await readAllUsers(url, headers);
   const cleanEmail = email.toLowerCase().trim();
-  const foundIndex = allUsers.findIndex(
+
+  // Find ALL entries for this email, not just the first one
+  // This fixes the bug where an old duplicate with an old password blocked login
+  const matches = allUsers.filter(
     (u) => u?.email?.toLowerCase().trim() === cleanEmail
   );
 
   // If account existed only in localStorage, auto-migrate it to Upstash
-  if (foundIndex === -1 && localUser && localUser.password === password) {
+  if (matches.length === 0 && localUser && localUser.password === password) {
     const migratedUser = {
       ...localUser,
       email: cleanEmail,
@@ -90,12 +93,14 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, user: safe });
   }
 
-  if (foundIndex === -1) {
+  if (matches.length === 0) {
     return res.status(404).json({ ok: false, error: "No account with this email. Please register first." });
   }
 
-  const found = allUsers[foundIndex];
-  if (found.password !== password) {
+  // Try every duplicate — if ANY matches the password, log them in
+  const found = matches.find((u) => u.password === password);
+
+  if (!found) {
     return res.status(401).json({ ok: false, error: "Wrong password. Try again." });
   }
 
@@ -108,8 +113,13 @@ export default async function handler(req, res) {
     lastSeen: new Date().toISOString(),
   };
 
-  allUsers[foundIndex] = updatedUser;
-  await saveAllUsersAsList(url, headers, allUsers);
+  // Clean up: keep only the matching entry, remove old duplicates for this email
+  const cleaned = allUsers.filter(
+    (u) => u?.email?.toLowerCase().trim() !== cleanEmail
+  );
+  cleaned.push(updatedUser);
+
+  await saveAllUsersAsList(url, headers, cleaned);
 
   const { password: _, ...safe } = updatedUser;
   return res.status(200).json({ ok: true, user: safe });
