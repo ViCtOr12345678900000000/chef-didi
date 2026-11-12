@@ -311,9 +311,7 @@ export default function IngredientPicker({ user, themeId, setThemeId, lang, setL
         </div>
       </div>
      
-      <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 mt-4">
-        <Quests user={user} location={location} themeId={themeId} />
-      </div>
+      
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 pb-6 mt-4">
         <div className="bg-white rounded-[24px] p-4 shadow-xl flex flex-wrap gap-2">
           <button onClick={() => { if (needAuth()) return; setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className={`h-10 px-4 rounded-full text-[12px] font-bold flex items-center gap-1.5 ${showFav ? `bg-gradient-to-r ${theme.btn} text-white` : "bg-stone-100"}`}>{isGuest ? <Lock size={13} /> : <Heart size={14} />} Favourites {isGuest ? "🔒" : `(${favList.length})`}</button>
