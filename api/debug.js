@@ -1,4 +1,19 @@
+import { getLivePrices } from '../lib/gemini-prices.js';
+
 export default async function handler(req, res) {
+  // ===== NEW JOB: Get Current Price button =====
+  // Uses debug.js so we stay at 12 api files - no new file needed
+  // Called from Testing.jsx as: /api/debug?action=prices-refresh
+  if (req.query.action === 'prices-refresh' && req.method === 'POST') {
+    try {
+      const data = await getLivePrices();
+      return res.status(200).json({ success: true, data });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ===== YOUR OLD DEBUG.JS - UNCHANGED BELOW =====
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return res.status(200).json({ error: "NO ENV VARS", hasUrl: !!url, hasToken: !!token });
