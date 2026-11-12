@@ -22,23 +22,26 @@ async function redis(cmd, ...args) {
 }
 
 async function getList(key) {
-  // 1. Try LRANGE first for lists populated via RPUSH (e.g. visitors)
   try {
     const rawList = await redis("LRANGE", key, "0", "-1");
-    if (Array.isArray(rawList) && rawList.length > 0) {
-      return rawList.map(item => {
+    if (Array.isArray(rawList)) {
+      const parsedItems = [];
+      for (const item of rawList) {
         try {
           let s = typeof item === "string" ? item : JSON.stringify(item);
           try { s = decodeURIComponent(s); } catch {}
-          return JSON.parse(s);
+          try { s = decodeURIComponent(s); } catch {}
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) parsedItems.push(...parsed);
+          else parsedItems.push(parsed);
         } catch {
-          return item;
+          parsedItems.push(item);
         }
-      });
+      }
+      return parsedItems;
     }
   } catch {}
 
-  // 2. Fallback to GET for JSON arrays (SET)
   try {
     const raw = await redis("GET", key);
     if (!raw) return [];
@@ -52,6 +55,14 @@ async function getList(key) {
 }
 
 async function saveList(key, list) {
+  // For 'users', always maintain a Redis List so login.js & migrate.js stay compatible
+  if (key === "users") {
+    await redis("DEL", "users");
+    for (const item of list) {
+      await redis("RPUSH", "users", JSON.stringify(item));
+    }
+    return true;
+  }
   return redis("SET", key, JSON.stringify(list));
 }
 
@@ -64,19 +75,37 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      const [visitors, users, reviews] = await Promise.all([
+      const [visitors, rawUsers, reviews] = await Promise.all([
         getList("visitors"),
         getList("users"),
         getList("reviews"),
       ]);
 
-      return res.status(200).json({ visitors, users, reviews });
+      // Only show users not soft-deleted from the dashboard, plus count total in Upstash
+      const activeUsers = rawUsers.filter(u => !u?.deletedFromAdmin);
+      const hiddenUsersCount = rawUsers.length - activeUsers.length;
+
+      return res.status(200).json({
+        visitors,
+        users: activeUsers,
+        totalRegisteredInUpstash: rawUsers.length,
+        hiddenUsersCount,
+        reviews,
+      });
     }
 
     if (req.method === "POST") {
       const body = req.body || {};
-      let type = body.type;
 
+      // Restore all accidentally deleted registered users from Upstash back to AdminDashboard
+      if (body.action === "restore-users") {
+        const rawUsers = await getList("users");
+        const restored = rawUsers.map(u => ({ ...u, deletedFromAdmin: false }));
+        await saveList("users", restored);
+        return res.status(200).json({ ok: true, restoredCount: restored.length });
+      }
+
+      let type = body.type;
       if (!type) {
         if (body.comment) type = "reviews";
         else if (body.email && body.name) type = "users";
@@ -114,10 +143,26 @@ export default async function handler(req, res) {
 
       const list = await getList(type);
 
+      // Soft-delete users so they remain safely stored in Upstash
+      if (type === "users") {
+        let updated = false;
+        const softDeletedList = list.map(item => {
+          const isMatch = (body.id && String(item.id) === String(body.id)) || (body.email && item.email === body.email);
+          if (isMatch) {
+            updated = true;
+            return { ...item, deletedFromAdmin: true };
+          }
+          return item;
+        });
+
+        if (!updated) return res.status(404).json({ ok: false, error: "User not found." });
+        await saveList("users", softDeletedList);
+        return res.status(200).json({ ok: true, softDeleted: true });
+      }
+
       const filtered = list.filter(item => {
         if (body.id) return String(item.id) !== String(body.id);
         if (type === "reviews") return !(item.createdAt === body.createdAt && item.comment === body.comment);
-        if (type === "users") return !(item.email === body.email);
         return !(item.time === body.time && item.city === body.city);
       });
 
