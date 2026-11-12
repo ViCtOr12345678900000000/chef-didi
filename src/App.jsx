@@ -79,12 +79,17 @@ export default function App() {
 
   useEffect(() => { doMigrate(); }, []);
 
+  // --- FIXED TRACKING ---
+  // Old code: if (!sessionStorage.getItem('didi-counted')) — counted once per tab forever, then never again.
+  // That's why it "used to work" and then stopped for you and return visitors.
+  // New code: counts every fresh load, throttled to once per 30 mins so refresh-spam doesn't inflate it.
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash === '#my-number') return;
-    if (!sessionStorage.getItem('didi-counted')) {
-      sessionStorage.setItem('didi-counted', '1');
-      fetch('/api/track').catch(() => {});
-    }
+    const last = Number(sessionStorage.getItem('didi-counted-at') || 0);
+    const now = Date.now();
+    if (now - last < 30 * 60 * 1000) return;
+    sessionStorage.setItem('didi-counted-at', String(now));
+    fetch('/api/track', { credentials: 'same-origin', keepalive: true }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -125,7 +130,6 @@ export default function App() {
       }, IDLE_TIMEOUT);
     };
 
-    // If they left 5+ mins ago and came back, log out immediately
     const last = Number(localStorage.getItem("didi_lastActive") || 0);
     if (last && Date.now() - last > IDLE_TIMEOUT) {
       handleLogout();
