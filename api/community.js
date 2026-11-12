@@ -1,4 +1,5 @@
-// api/community.js - hardened, never returns HTML
+import { Redis } from "@upstash/redis";
+
 let redis = null;
 
 function getRedis() {
@@ -6,8 +7,6 @@ function getRedis() {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
-  // lazy import so missing env doesn't kill function at import time
-  const { Redis } = require("@upstash/redis");
   redis = new Redis({ url, token });
   return redis;
 }
@@ -30,12 +29,9 @@ export default async function handler(req, res) {
     const body = parseBody(req);
     const type = req.query.type || body.type;
 
-    // ---------- MARKET PRICES ----------
     if (type === "market-prices") {
       const client = getRedis();
-      if (!client) {
-        return res.status(500).json({ error: "Missing UPSTASH_REDIS_REST_URL / TOKEN in Vercel" });
-      }
+      if (!client) return res.status(500).json({ error: "Missing UPSTASH_REDIS_REST_URL / TOKEN in Vercel" });
 
       if (req.method === "GET") {
         const location = req.query.location || "lagos";
@@ -86,7 +82,6 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "method not allowed" });
     }
 
-    // ---------- QUESTS ----------
     if (type === "quests") {
       const client = getRedis();
       if (!client) return res.status(500).json({ error: "Missing UPSTASH env vars" });
