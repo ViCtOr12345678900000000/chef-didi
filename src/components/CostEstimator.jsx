@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { marketLocationFor } from "../lib/didi";
 
-// Realistic Nigerian retail unit prices (in ₦) per standard cooking unit
 const UNIT_RATES_NGN = [
   { keywords: ["puna yam", "yam"], unitPrice: 2500, defaultQty: 0.3, unitType: "tuber" },
   { keywords: ["rice", "basmati", "ofada"], unitPrice: 400, defaultQty: 1, unitType: "cup" },
@@ -40,98 +39,48 @@ const UNIT_RATES_NGN = [
 
 function parseSmartPrice(input) {
   if (!input) return 0;
-  let str = String(input)
-    .toLowerCase()
-    .replace(/[₦$,]/g, "")
-    .replace(/\b(naira|dollars?|bucks?|only)\b/g, "")
-    .trim();
-
+  let str = String(input).toLowerCase().replace(/[₦$,]/g, "").replace(/\b(naira|dollars?|bucks?|only)\b/g, "").trim();
   if (!str) return 0;
-
   const suffixMatch = str.match(/^(\d+(?:\.\d+)?)\s*(k|thousand|m|million)$/);
   if (suffixMatch) {
     const num = parseFloat(suffixMatch[1]);
     const mult = suffixMatch[2].startsWith("m") ? 1_000_000 : 1_000;
     return Math.round(num * mult);
   }
-
-  if (/^\d+(?:\.\d+)?$/.test(str)) {
-    return Math.round(parseFloat(str));
-  }
-
-  const SMALL = {
-    zero: 0, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5,
-    six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
-    thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
-    eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40,
-    fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
-  };
+  if (/^\d+(?:\.\d+)?$/.test(str)) return Math.round(parseFloat(str));
+  const SMALL = { zero: 0, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
   const SCALE = { hundred: 100, thousand: 1000, k: 1000, million: 1000000 };
-
   const words = str.replace(/[-]/g, " ").split(/\s+/).filter((w) => w && w !== "and");
-  let total = 0;
-  let current = 0;
-  let matchedAny = false;
-
+  let total = 0; let current = 0; let matchedAny = false;
   for (const w of words) {
-    if (/^\d+(?:\.\d+)?$/.test(w)) {
-      current += parseFloat(w);
-      matchedAny = true;
-    } else if (SMALL[w] !== undefined) {
-      current += SMALL[w];
-      matchedAny = true;
-    } else if (w === "hundred") {
-      current = (current || 1) * 100;
-      matchedAny = true;
-    } else if (SCALE[w] !== undefined) {
-      total += (current || 1) * SCALE[w];
-      current = 0;
-      matchedAny = true;
-    }
+    if (/^\d+(?:\.\d+)?$/.test(w)) { current += parseFloat(w); matchedAny = true; }
+    else if (SMALL[w] !== undefined) { current += SMALL[w]; matchedAny = true; }
+    else if (w === "hundred") { current = (current || 1) * 100; matchedAny = true; }
+    else if (SCALE[w] !== undefined) { total += (current || 1) * SCALE[w]; current = 0; matchedAny = true; }
   }
-
   return matchedAny ? Math.round(total + current) : 0;
 }
 
 function estimateIngredientCost(rawText, isAbroad) {
   const clean = String(rawText).toLowerCase().trim();
   if (clean.includes("water")) return 0;
-
   const rule = UNIT_RATES_NGN.find((r) => r.keywords.some((k) => clean.includes(k)));
   if (!rule) return isAbroad ? 2 : 500;
-
   let multiplier = rule.defaultQty;
   const numMatch = clean.match(/^(\d+(?:\.\d+)?|\d+\/\d+)/);
-
   if (numMatch) {
     let val = numMatch[1];
-    if (val.includes("/")) {
-      const [a, b] = val.split("/").map(Number);
-      val = b ? a / b : 1;
-    } else {
-      val = parseFloat(val);
-    }
-
+    if (val.includes("/")) { const [a, b] = val.split("/").map(Number); val = b ? a / b : 1; } else { val = parseFloat(val); }
     if (/\d+\s*(g|gram|grams)\b/.test(clean)) {
-      if (rule.unitType === "tuber" || rule.unitType === "portion" || rule.unitType === "lap/cut") {
-        multiplier = Math.max(0.25, val / 1000);
-      } else if (rule.unitType === "cup") {
-        multiplier = Math.max(0.5, val / 200);
-      } else {
-        multiplier = Math.max(0.5, val / 250);
-      }
-    } else if (/\d+\s*(kg)\b/.test(clean)) {
-      multiplier = val * 4;
-    } else if (/\d+\s*(ml)\b/.test(clean)) {
-      multiplier = Math.max(0.5, val / 250);
-    } else {
-      multiplier = val;
-    }
+      if (rule.unitType === "tuber" || rule.unitType === "portion" || rule.unitType === "lap/cut") multiplier = Math.max(0.25, val / 1000);
+      else if (rule.unitType === "cup") multiplier = Math.max(0.5, val / 200);
+      else multiplier = Math.max(0.5, val / 250);
+    } else if (/\d+\s*(kg)\b/.test(clean)) multiplier = val * 4;
+    else if (/\d+\s*(ml)\b/.test(clean)) multiplier = Math.max(0.5, val / 250);
+    else multiplier = val;
   }
-
   const rawNgn = rule.unitPrice * multiplier;
   const roundedNgn = Math.max(50, Math.round(rawNgn / 50) * 50);
-
   return isAbroad ? Math.max(1, Math.round(roundedNgn / 600)) : roundedNgn;
 }
 
@@ -151,28 +100,20 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
   const currency = isAbroad ? "$" : "₦";
 
   const ingredients = recipe?.ingredients || [];
-  const parsed = ingredients
-    .map((raw) => {
-      if (typeof raw === "string") {
-        const parts = raw.split(" - ");
-        return { name: parts[0]?.trim() || raw, detail: parts[1] || "" };
-      }
-      return { name: raw?.name || raw?.ingredient || "", detail: raw?.qty || raw?.amount || "" };
-    })
-    .filter((i) => i.name);
+  const parsed = ingredients.map((raw) => {
+    if (typeof raw === "string") {
+      const parts = raw.split(" - ");
+      return { name: parts[0]?.trim() || raw, detail: parts[1] || "" };
+    }
+    return { name: raw?.name || raw?.ingredient || "", detail: raw?.qty || raw?.amount || "" };
+  }).filter((i) => i.name);
 
   const priceFor = (name, detail) => {
     const fullText = `${name} ${detail}`.trim();
     const key = String(name).toLowerCase().trim();
-
-    if (community.prices[key] !== undefined) {
-      return { price: Number(community.prices[key]), source: "community", count: community.counts[key] || 1 };
-    }
+    if (community.prices[key] !== undefined) return { price: Number(community.prices[key]), source: "community", count: community.counts[key] || 1 };
     const found = Object.keys(community.prices).find((k) => key.includes(k) || k.includes(key));
-    if (found) {
-      return { price: Number(community.prices[found]), source: "community", count: community.counts[found] || 1 };
-    }
-
+    if (found) return { price: Number(community.prices[found]), source: "community", count: community.counts[found] || 1 };
     const est = estimateIngredientCost(fullText, isAbroad);
     return { price: est, source: "estimate", count: 0 };
   };
@@ -186,10 +127,11 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
       setLoading(true);
       try {
         const r = await fetch(`/api/community?type=market-prices&location=${encodeURIComponent(selectedLoc)}`);
-        if (r.ok) {
-          const j = await r.json();
-          if (j.prices) setCommunity({ prices: j.prices, counts: j.counts || {} });
-        }
+        const text = await r.text();
+        try {
+          const j = JSON.parse(text);
+          if (r.ok && j.prices) setCommunity({ prices: j.prices, counts: j.counts || {} });
+        } catch { /* ignore non-JSON from Vercel */ }
       } catch {}
       setLoading(false);
     };
@@ -201,48 +143,31 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
   const handleReport = async (e) => {
     if (e) e.preventDefault();
     const finalItem = (reportItem === "__other__" ? customItem : reportItem).trim();
-    if (!finalItem || !reportPrice.trim()) {
-      setReportMsg("Pick an ingredient + enter price");
-      return;
-    }
-
+    if (!finalItem || !reportPrice.trim()) { setReportMsg("Pick an ingredient + enter price"); return; }
     const p = parseSmartPrice(reportPrice);
-    if (!p || p < 1) {
-      setReportMsg(`Enter a valid amount e.g. ${isAbroad ? "5 or five" : "500, 5k, or five thousand"}`);
-      return;
-    }
-
-    setReportSending(true);
-    setReportMsg("");
+    if (!p || p < 1) { setReportMsg(`Enter a valid amount e.g. ${isAbroad ? "5 or five" : "500, 5k, or five thousand"}`); return; }
+    setReportSending(true); setReportMsg("");
     try {
       const res = await fetch("/api/community?type=market-prices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: selectedLoc,
-          item: finalItem,
-          price: p,
-          email: user?.email || "guest",
-        }),
+        body: JSON.stringify({ location: selectedLoc, item: finalItem, price: p, email: user?.email || "guest" }),
       });
-      const j = await res.json();
+      const text = await res.text();
+      let j;
+      try { j = JSON.parse(text); } catch { throw new Error("Server returned non-JSON: " + text.slice(0, 100)); }
       if (!res.ok) throw new Error(j.error || "Could not save price");
-
       const newAvg = j.average || p;
       setCommunity((prev) => ({
         prices: { ...prev.prices, [finalItem.toLowerCase()]: newAvg },
         counts: { ...prev.counts, [finalItem.toLowerCase()]: (prev.counts[finalItem.toLowerCase()] || 0) + 1 },
       }));
-
       setReportMsg(`✅ Saved ${currency}${p.toLocaleString()}! New average: ${currency}${newAvg.toLocaleString()}`);
-      setReportPrice("");
-      setCustomItem("");
+      setReportPrice(""); setCustomItem("");
       setTimeout(() => setShowReport(false), 1800);
     } catch (e) {
       setReportMsg("❌ " + (e.message || "Error saving price"));
-    } finally {
-      setReportSending(false);
-    }
+    } finally { setReportSending(false); }
   };
 
   if (!parsed.length) return null;
@@ -250,146 +175,50 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
   return (
     <div className="bg-white rounded-[24px] p-4 shadow-xl mt-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <h3 className="font-bold text-[14px]">
-          💰 Cost Estimator — {selectedLoc === "lagos" ? "Nigerian Market 🇳🇬" : "Abroad Market ✈️"}
-        </h3>
-
+        <h3 className="font-bold text-[14px]">💰 Cost Estimator — {selectedLoc === "lagos" ? "Nigerian Market 🇳🇬" : "Abroad Market ✈️"}</h3>
         <div className="flex bg-stone-100 p-0.5 rounded-full text-[11px] font-bold">
-          <button
-            type="button"
-            onClick={() => setSelectedLoc("lagos")}
-            className={`px-2.5 py-1 rounded-full transition ${
-              selectedLoc === "lagos" ? "bg-green-600 text-white shadow-sm" : "text-stone-600"
-            }`}
-          >
-            🇳🇬 Nigeria (₦)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedLoc("abroad")}
-            className={`px-2.5 py-1 rounded-full transition ${
-              selectedLoc === "abroad" ? "bg-black text-white shadow-sm" : "text-stone-600"
-            }`}
-          >
-            ✈️ Abroad ($)
-          </button>
+          <button type="button" onClick={() => setSelectedLoc("lagos")} className={`px-2.5 py-1 rounded-full transition ${selectedLoc === "lagos" ? "bg-green-600 text-white shadow-sm" : "text-stone-600"}`}>🇳🇬 Nigeria (₦)</button>
+          <button type="button" onClick={() => setSelectedLoc("abroad")} className={`px-2.5 py-1 rounded-full transition ${selectedLoc === "abroad" ? "bg-black text-white shadow-sm" : "text-stone-600"}`}>✈️ Abroad ($)</button>
         </div>
       </div>
-
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] text-stone-400">
-          {communityCount > 0 ? "Green = community reported. Amber = estimated." : "Estimated per portion. Tap below to update!"}
-        </p>
-        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0">
-          {loading ? "Syncing..." : `${communityCount}/${rows.length} verified`}
-        </span>
+        <p className="text-[11px] text-stone-400">{communityCount > 0 ? "Green = community reported. Amber = estimated." : "Estimated per portion. Tap below to update!"}</p>
+        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0">{loading ? "Syncing..." : `${communityCount}/${rows.length} verified`}</span>
       </div>
-
       <div className="space-y-1.5">
         {rows.map((r, idx) => (
           <div key={idx} className="flex justify-between items-center text-[12px] py-1.5 border-b last:border-0 border-stone-100">
-            <span className="font-semibold pr-2">
-              {r.name} <span className="font-normal text-stone-400">{r.detail}</span>
-            </span>
+            <span className="font-semibold pr-2">{r.name} <span className="font-normal text-stone-400">{r.detail}</span></span>
             <span className="flex items-center gap-1.5 shrink-0">
-              <span className="font-bold">
-                {r.price === 0 ? "Free" : `${currency}${r.price.toLocaleString()}`}
-              </span>
-              {r.price > 0 && (
-                r.source === "community" ? (
-                  <span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                    ✓ {r.count} reports
-                  </span>
-                ) : (
-                  <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                    EST
-                  </span>
-                )
-              )}
+              <span className="font-bold">{r.price === 0 ? "Free" : `${currency}${r.price.toLocaleString()}`}</span>
+              {r.price > 0 && (r.source === "community" ? (<span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">✓ {r.count} reports</span>) : (<span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">EST</span>))}
             </span>
           </div>
         ))}
       </div>
-
       <div className="flex justify-between items-center mt-3 pt-3 border-t border-stone-200">
         <span className="text-[13px] font-bold">Estimated Total</span>
-        <span className="text-[17px] font-black text-green-700">
-          {currency}{total.toLocaleString()}
-        </span>
+        <span className="text-[17px] font-black text-green-700">{currency}{total.toLocaleString()}</span>
       </div>
-
       {!showReport ? (
-        <button
-          type="button"
-          onClick={() => {
-            setShowReport(true);
-            if (!reportItem && parsed[0]) setReportItem(parsed[0].name);
-          }}
-          className="w-full mt-3 h-10 bg-black text-white rounded-full text-[12px] font-bold active:scale-95 transition"
-        >
-          ✏️ Edit / Report Price in {selectedLoc === "lagos" ? "Nigeria" : "Your Location"}
-        </button>
+        <button type="button" onClick={() => { setShowReport(true); if (!reportItem && parsed[0]) setReportItem(parsed[0].name); }} className="w-full mt-3 h-10 bg-black text-white rounded-full text-[12px] font-bold active:scale-95 transition">✏️ Edit / Report Price in {selectedLoc === "lagos" ? "Nigeria" : "Your Location"}</button>
       ) : (
         <div className="mt-3 bg-stone-50 border border-stone-200 rounded-2xl p-3" onSubmit={(e) => e.preventDefault()}>
-          <p className="text-[12px] font-bold mb-2">
-            Update price in {selectedLoc === "lagos" ? "Nigeria (₦)" : "Abroad ($)"}:
-          </p>
-          <select
-            value={reportItem}
-            onChange={(e) => { setReportItem(e.target.value); setReportMsg(""); }}
-            className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2"
-          >
-            {parsed.map((r, i) => (
-              <option key={i} value={r.name}>{r.name}</option>
-            ))}
+          <p className="text-[12px] font-bold mb-2">Update price in {selectedLoc === "lagos" ? "Nigeria (₦)" : "Abroad ($)"}:</p>
+          <select value={reportItem} onChange={(e) => { setReportItem(e.target.value); setReportMsg(""); }} className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2">
+            {parsed.map((r, i) => (<option key={i} value={r.name}>{r.name}</option>))}
             <option value="__other__">Other ingredient...</option>
           </select>
-
           {reportItem === "__other__" && (
-            <input
-              type="text"
-              value={customItem}
-              onChange={(e) => setCustomItem(e.target.value)}
-              placeholder="Type ingredient e.g. Beans"
-              className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2"
-            />
+            <input type="text" value={customItem} onChange={(e) => setCustomItem(e.target.value)} placeholder="Type ingredient e.g. Beans" className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2" />
           )}
-
           <div className="flex gap-2">
-            <input
-              type="text"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck="false"
-              value={reportPrice}
-              onChange={(e) => setReportPrice(e.target.value)}
-              placeholder={isAbroad ? "e.g. 5 or five" : "e.g. 5000, 5k, or five thousand"}
-              className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleReport}
-              disabled={reportSending}
-              className="h-10 px-5 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50 shrink-0"
-            >
-              {reportSending ? "Saving..." : "Save"}
-            </button>
+            <input type="text" autoComplete="off" autoCorrect="off" spellCheck="false" value={reportPrice} onChange={(e) => setReportPrice(e.target.value)} placeholder={isAbroad ? "e.g. 5 or five" : "e.g. 5000, 5k, or five thousand"} className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none" />
+            <button type="button" onClick={handleReport} disabled={reportSending} className="h-10 px-5 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50 shrink-0">{reportSending ? "Saving..." : "Save"}</button>
           </div>
-
-          {reportPrice.trim() && parsedPreview > 0 && (
-            <p className="text-[11px] text-green-700 font-semibold mt-1.5 pl-2">
-              Detected amount: {currency}{parsedPreview.toLocaleString()}
-            </p>
-          )}
-
+          {reportPrice.trim() && parsedPreview > 0 && (<p className="text-[11px] text-green-700 font-semibold mt-1.5 pl-2">Detected amount: {currency}{parsedPreview.toLocaleString()}</p>)}
           {reportMsg && <p className="text-[11px] mt-2 font-semibold">{reportMsg}</p>}
-          <button
-            type="button"
-            onClick={() => setShowReport(false)}
-            className="text-[11px] text-stone-400 font-bold mt-2 block"
-          >
-            Cancel
-          </button>
+          <button type="button" onClick={() => setShowReport(false)} className="text-[11px] text-stone-400 font-bold mt-2 block">Cancel</button>
         </div>
       )}
     </div>
