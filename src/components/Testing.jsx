@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-// Fallback if Gemini hasn't run yet - real prices from 10 Nov 2026
 const FALLBACK_PRICES = {
   updated: "10 Nov 2026",
   source: "Mile 12 via Ola of North + Lagos Ministry",
@@ -34,17 +33,14 @@ export default function Testing() {
   const [status, setStatus] = useState('');
   const [budget, setBudget] = useState(5000);
 
-  // ✅ NEW WAY - Reuses api/track.js, NO new api file
-  // api/track.js must have the 5 lines at top that check ?action=prices-refresh
-  // and call getLivePrices() from lib/gemini-prices.js
+  // ✅ Uses api/debug.js - stays at 12 files
   const getCurrentPrice = async () => {
     setLoading(true);
     setStatus('🔍 Gemini is checking FoodPrices.ng + Mile 12...');
     try {
-      const res = await fetch('/api/track?action=prices-refresh', { method: 'POST' });
+      const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Failed');
-      
       const data = json.data;
       setPrices(data);
       localStorage.setItem('didi_live_prices', JSON.stringify(data));
@@ -86,7 +82,6 @@ export default function Testing() {
         <h1 className="text-2xl font-bold">🧪 Didi Lab - #testing</h1>
         <p className="text-stone-500 text-sm">Only you see this. Test here before it goes live.</p>
 
-        {/* ===== LIVE ₦5k SECTION ===== */}
         <div className="bg-white border rounded-2xl p-4 mt-4 shadow-sm">
           <div className="flex justify-between items-start">
             <div>
@@ -97,7 +92,6 @@ export default function Testing() {
             <span className="text-[11px] bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">● LIVE</span>
           </div>
 
-          {/* THE BUTTON */}
           <button
             onClick={getCurrentPrice}
             disabled={loading}
@@ -108,7 +102,6 @@ export default function Testing() {
           {status && <p className="text-xs mt-2 bg-stone-50 p-2 rounded-lg">{status}</p>}
           {prices.notes && <p className="text-xs mt-2 bg-yellow-50 text-yellow-800 p-2 rounded-lg">💡 {prices.notes}</p>}
 
-          {/* PRICE SECTION - Auto-filled by Gemini */}
           <div className="mt-4 space-y-2">
             {prices.items.map(item => (
               <div key={item.id} className="flex justify-between items-center bg-stone-50 p-2.5 rounded-lg text-sm">
@@ -118,7 +111,6 @@ export default function Testing() {
             ))}
           </div>
 
-          {/* BUDGET CALCULATOR */}
           <div className="mt-5">
             <p className="font-bold">What can ₦{budget.toLocaleString()} cook today?</p>
             <input type="range" min={3000} max={10000} step={500} value={budget} onChange={e => setBudget(Number(e.target.value))} className="w-full mt-2" />
