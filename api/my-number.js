@@ -1,19 +1,25 @@
 const URL = process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
 const VALID_TYPES = ["visitors", "users", "reviews"];
 
 async function redis(cmd, ...args) {
-  if (!URL || !TOKEN) throw new Error("Upstash environment variables are missing.");
+  if (!URL || !TOKEN) {
+    throw new Error("Upstash environment variables are missing.");
+  }
   const baseURL = URL.replace(/\/$/, "");
-  const endpoint = `${baseURL}/${cmd}/${args.map(arg => encodeURIComponent(String(arg))).join("/")}`;
-  const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  const endpoint = `${baseURL}/${cmd}/${args.map((arg) => encodeURIComponent(String(arg))).join("/")}`;
+  const res = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
   const json = await res.json();
-  if (!res.ok || json.error) throw new Error(json.error || "Redis request failed.");
+  if (!res.ok || json.error) {
+    throw new Error(json.error || "Redis request failed.");
+  }
   return json.result;
 }
 
 async function getList(key) {
+  // 1. Try LRANGE first
   try {
     const rawList = await redis("LRANGE", key, "0", "-1");
     if (Array.isArray(rawList) && rawList.length > 0) {
@@ -32,6 +38,7 @@ async function getList(key) {
     }
   } catch {}
 
+  // 2. Fallback to GET for JSON arrays (SET)
   try {
     const raw = await redis("GET", key);
     if (!raw) return [];
@@ -51,6 +58,9 @@ async function saveAsRedisList(key, list) {
   }
 }
 
+const sortNewestFirst = (a, b) =>
+  new Date(b.time || b.createdAt || 0) - new Date(a.time || a.createdAt || 0);
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
@@ -66,13 +76,13 @@ export default async function handler(req, res) {
         getList("reviews"),
       ]);
 
-      const visibleUsers = allUsers.filter(u => !u.deletedFromAdmin);
+      const visibleUsers = allUsers.filter((u) => !u.deletedFromAdmin);
       const hiddenUsersCount = allUsers.length - visibleUsers.length;
 
       return res.status(200).json({
-        visitors,
-        users: visibleUsers,
-        reviews,
+        visitors: visitors.sort(sortNewestFirst),
+        users: visibleUsers.sort(sortNewestFirst),
+        reviews: reviews.sort(sortNewestFirst),
         totalRegisteredInUpstash: allUsers.length,
         hiddenUsersCount,
       });
@@ -84,7 +94,7 @@ export default async function handler(req, res) {
       // Restore accidentally deleted users back to AdminDashboard
       if (body.action === "restore-users") {
         const allUsers = await getList("users");
-        const restored = allUsers.map(u => ({ ...u, deletedFromAdmin: false }));
+        const restored = allUsers.map((u) => ({ ...u, deletedFromAdmin: false }));
         await saveAsRedisList("users", restored);
         return res.status(200).json({ ok: true, restoredCount: restored.length });
       }
@@ -131,8 +141,12 @@ export default async function handler(req, res) {
       if (type === "users") {
         const cleanEmail = String(body.email || "").toLowerCase().trim();
         let found = false;
-        const updated = list.map(u => {
-          if ((body.id && String(u.id) === String(body.id)) || (cleanEmail && u.email?.toLowerCase().trim() === cleanEmail)) {
+
+        const updated = list.map((u) => {
+          if (
+            (body.id && String(u.id) === String(body.id)) ||
+            (cleanEmail && u.email?.toLowerCase().trim() === cleanEmail)
+          ) {
             found = true;
             return { ...u, deletedFromAdmin: true };
           }
@@ -144,14 +158,18 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, hidden: 1 });
       }
 
-      const filtered = list.filter(item => {
+      const filtered = list.filter((item) => {
         if (body.id) return String(item.id) !== String(body.id);
-        if (type === "reviews") return !(item.createdAt === body.createdAt && item.comment === body.comment);
+        if (type === "reviews") {
+          return !(item.createdAt === body.createdAt && item.comment === body.comment);
+        }
         return !(item.time === body.time && item.city === body.city);
       });
 
       const deleted = list.length - filtered.length;
-      if (deleted === 0) return res.status(404).json({ ok: false, error: "Record not found." });
+      if (deleted === 0) {
+        return res.status(404).json({ ok: false, error: "Record not found." });
+      }
 
       await saveAsRedisList(type, filtered);
       return res.status(200).json({ ok: true, deleted });
