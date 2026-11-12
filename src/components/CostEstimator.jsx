@@ -315,14 +315,16 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
           )}
 
           <div className="flex gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={reportPrice}
-              onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder={isAbroad ? "Price in $ e.g. 5" : "Price in ₦ e.g. 450"}
-              className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none"
-            />
+<input
+  type="tel"
+  inputMode="numeric"
+  pattern="[0-9]*"
+  value={reportPrice}
+  onChange={(e) => setReportPrice(e.target.value.replace(/[^0-9]/g, ""))}
+  placeholder={isAbroad ? "Price in $ e.g. 5" : "Price in ₦ e.g. 55"}
+  className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none"
+/>
+
             <button
               type="button"
               onClick={handleReport}
