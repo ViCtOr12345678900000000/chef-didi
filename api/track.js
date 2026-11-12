@@ -1,36 +1,20 @@
 import crypto from "crypto";
 
-async function readUsersList(url, headers) {
-  const r = await fetch(`${url}/lrange/users/0/-1`, { headers });
-  const data = await r.json();
-  const users = [];
-  if (Array.isArray(data.result)) {
-    for (const item of data.result) {
-      try {
-        let s = typeof item === "string" ? item : JSON.stringify(item);
-        try { s = decodeURIComponent(s); } catch {}
-        try { s = decodeURIComponent(s); } catch {}
-        const parsed = JSON.parse(s);
-        if (Array.isArray(parsed)) users.push(...parsed);
-        else if (parsed && typeof parsed === "object") users.push(parsed);
-      } catch {}
-    }
-  }
-  return users;
-}
-
 export default async function handler(req, res) {
   try {
     const ua = String(req.headers["user-agent"] || "");
     const uaLow = ua.toLowerCase();
 
+    // 1. Filter bot user-agents
     const isBotUA = /bot|crawler|spider|vercel|uptimerobot|pingdom|headless|preview|facebookexternalhit|whatsapp|telegrambot|googlebot|bingbot|ahrefs|semrush|mj12bot|dotbot|petalbot|bytespider|gptbot|claudebot|anthropic|amazonbot|applebot|yandex|baidu/i.test(uaLow);
     if (isBotUA) return res.status(200).json({ ok: true, skipped: "bot-ua" });
 
+    // 2. Reject non-browser agents
     if (!ua || ua.length < 20 || !uaLow.includes("mozilla")) {
       return res.status(200).json({ ok: true, skipped: "no-browser" });
     }
 
+    // 3. Filter Vercel datacenter IPs
     const rawCity = req.headers["x-vercel-ip-city"] ? decodeURIComponent(req.headers["x-vercel-ip-city"]) : "Unknown";
     const datacenterCities = ["san jose", "ashburn", "boardman", "dulles", "prineville", "hillsboro", "quincy", "the dalles", "council bluffs", "moncks corner", "frankfurt am main"];
     const isDatacenter = datacenterCities.some(c => rawCity.toLowerCase().includes(c));
@@ -43,6 +27,7 @@ export default async function handler(req, res) {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     const headers = { Authorization: `Bearer ${token}` };
 
+    // 4. Read existing 'vid' cookie OR generate new visitor fingerprint
     const cookieHeader = String(req.headers.cookie || "");
     const cookieMatch = cookieHeader.match(/(?:^|;\s*)vid=(v_[a-f0-9]{10})/);
     
@@ -58,36 +43,16 @@ export default async function handler(req, res) {
         .slice(0, 10);
     }
 
+    // 5. Set / refresh the 1-year HttpOnly cookie so location/network changes stay linked
     res.setHeader(
       "Set-Cookie",
       `vid=${visitorHash}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`
     );
 
+    // 6. Increment this specific visitor's hit count in Upstash Redis
     const countRes = await fetch(`${url}/hincrby/visitor_hits/${visitorHash}/1`, { headers });
     const countData = await countRes.json();
     const visitNumber = countData.result || 1;
-
-    // Increment registered user's visitCount if their vid cookie matches
-    const usersList = await readUsersList(url, headers);
-    let userUpdated = false;
-    const updatedUsers = usersList.map(u => {
-      if (u.visitorHash === visitorHash || (u.cookieId && u.cookieId === visitorHash)) {
-        userUpdated = true;
-        return {
-          ...u,
-          visitCount: (u.visitCount || 0) + 1,
-          lastSeen: new Date().toISOString(),
-        };
-      }
-      return u;
-    });
-
-    if (userUpdated) {
-      await fetch(`${url}/del/users`, { headers });
-      for (const u of updatedUsers) {
-        await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify(u))}`, { headers });
-      }
-    }
 
     const rawCountry = req.headers["x-vercel-ip-country"] ? decodeURIComponent(req.headers["x-vercel-ip-country"]) : "Unknown";
     const COUNTRY_MAP = { NG: "Nigeria", US: "United States", GB: "United Kingdom", UK: "United Kingdom", GH: "Ghana", KE: "Kenya", ZA: "South Africa", CA: "Canada", AU: "Australia", DE: "Germany" };
