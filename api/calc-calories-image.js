@@ -1,8 +1,8 @@
  export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Please try again." });
   const { image, goal } = req.body;
-  if (!image) return res.status(400).json({ error: "No image" });
-  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not set in Vercel" });
+  if (!image) return res.status(400).json({ error: "Please snap your food photo again." });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "Didi is resting right now. Please try again in a bit." });
 
   try {
     let mimeType = "image/jpeg";
@@ -38,14 +38,14 @@ If photo is not food, return: {"items":[],"totalKcal":0,"note":"This does not lo
 
     const raw = await geminiRes.text();
     let data;
-    try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: "Didi could not read vision response." }); }
-    if (!geminiRes.ok) return res.status(500).json({ error: data.error?.message || "Didi vision failed" });
+    try { data = JSON.parse(raw); } catch { return res.status(500).json({ error: "I couldn't see the food clearly. Please try again." }); }
+    if (!geminiRes.ok) return res.status(500).json({ error: "I can't identify the food in this photo. Please try again." });
 
     let txt = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const start = txt.indexOf("{");
     const end = txt.lastIndexOf("}");
-    if (start === -1 || end === -1) return res.status(500).json({ error: "Didi saw no food. Snap again with better light." });
+    if (start === -1 || end === -1) return res.status(500).json({ error: "I can't identify the food in this photo. Please try again with better light." });
     const parsed = JSON.parse(txt.slice(start, end + 1));
     return res.status(200).json(parsed);
-  } catch (e) { return res.status(500).json({ error: "Didi error: " + (e.message || "Failed") }); }
-} 
+  } catch (e) { return res.status(500).json({ error: "Something went wrong. Please try again." }); }
+}
