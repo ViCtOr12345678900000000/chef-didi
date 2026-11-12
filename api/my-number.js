@@ -19,32 +19,32 @@ async function redis(cmd, ...args) {
 }
 
 async function getList(key) {
-  // 1. Try LRANGE first
   try {
     const rawList = await redis("LRANGE", key, "0", "-1");
     if (Array.isArray(rawList) && rawList.length > 0) {
       const out = [];
       for (const item of rawList) {
         try {
-          let s = typeof item === "string" ? item : JSON.stringify(item);
-          try { s = decodeURIComponent(s); } catch {}
-          try { s = decodeURIComponent(s); } catch {}
+          if (typeof item === "object" && item !== null) { out.push(item); continue; }
+          let s = String(item);
+          if (s.startsWith("%7B") || s.startsWith("%7b")) {
+            try { s = decodeURIComponent(s); } catch {}
+          }
           const parsed = JSON.parse(s);
           if (Array.isArray(parsed)) out.push(...parsed);
           else if (parsed && typeof parsed === "object") out.push(parsed);
-        } catch {}
+        } catch (e) {
+          console.error("Skipped bad entry in", key, String(item).slice(0, 100));
+        }
       }
       return out;
     }
   } catch {}
 
-  // 2. Fallback to GET for JSON arrays (SET)
   try {
     const raw = await redis("GET", key);
     if (!raw) return [];
-    let s = typeof raw === "string" ? raw : JSON.stringify(raw);
-    try { s = decodeURIComponent(s); } catch {}
-    const parsed = JSON.parse(s);
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -70,6 +70,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const [visitors, allUsers, reviews] = await Promise.all([
         getList("visitors"),
         getList("users"),
@@ -91,7 +92,6 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const body = req.body || {};
 
-      // Restore accidentally deleted users back to AdminDashboard
       if (body.action === "restore-users") {
         const allUsers = await getList("users");
         const restored = allUsers.map((u) => ({ ...u, deletedFromAdmin: false }));
@@ -137,7 +137,6 @@ export default async function handler(req, res) {
 
       const list = await getList(type);
 
-      // Soft-delete for users so Upstash never loses their account
       if (type === "users") {
         const cleanEmail = String(body.email || "").toLowerCase().trim();
         let found = false;
