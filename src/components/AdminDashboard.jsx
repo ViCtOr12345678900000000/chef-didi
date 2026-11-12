@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Users, 
   Eye, 
@@ -16,8 +16,7 @@ import {
   TrendingUp,
   Activity,
   Layers,
-  Flame,
-  RotateCcw
+  Flame
 } from "lucide-react";
 
 const PAGE_SIZE = 15;
@@ -42,90 +41,40 @@ function isOldBot(v) {
 }
 
 export default function AdminDashboard() {
-  const [data, setData] = useState({
-    visitors: [],
-    users: [],
-    reviews: [],
-    totalRegisteredInUpstash: 0,
-    hiddenUsersCount: 0,
-  });
+  const [data, setData] = useState({ visitors: [], users: [], reviews: [] });
   const [activeTab, setActiveTab] = useState("visitors");
   const [search, setSearch] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("all");
   const [onlyReturning, setOnlyReturning] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [restoring, setRestoring] = useState(false);
   const [showBots, setShowBots] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [syncAlert, setSyncAlert] = useState("");
-  const lastSyncedCountRef = useRef(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/my-number");
       const json = await res.json();
-
-      const currentUsersCount = (json.users || []).length;
-      const totalUpstash = json.totalRegisteredInUpstash ?? currentUsersCount;
-
-      if (lastSyncedCountRef.current !== null && lastSyncedCountRef.current !== totalUpstash) {
-        setSyncAlert(`Registered accounts updated (${totalUpstash} in Upstash)`);
-        setTimeout(() => setSyncAlert(""), 6000);
-      }
-      lastSyncedCountRef.current = totalUpstash;
-
       setData({
         visitors: json.visitors || [],
         users: json.users || [],
         reviews: json.reviews || [],
-        totalRegisteredInUpstash: totalUpstash,
-        hiddenUsersCount: json.hiddenUsersCount || 0,
       });
     } catch (err) {
       console.error("Error loading metrics:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchData();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchData();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [fetchData]);
+  }, []);
 
   useEffect(() => {
     setPage(1);
   }, [activeTab, search, selectedCountry, showBots, onlyReturning]);
-
-  const handleRestoreUsers = async () => {
-    setRestoring(true);
-    try {
-      const res = await fetch("/api/my-number", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "restore-users" }),
-      });
-      if (res.ok) {
-        await fetchData();
-        setSyncAlert("All Upstash accounts restored!");
-        setTimeout(() => setSyncAlert(""), 5000);
-      }
-    } catch (err) {
-      console.error("Error restoring users:", err);
-    } finally {
-      setRestoring(false);
-    }
-  };
 
   // Process visitors, sort recent to oldest, and calculate total visits & cities per visitorHash
   const allVisitors = useMemo(() => {
@@ -234,20 +183,12 @@ export default function AdminDashboard() {
   // Delete handler
   const handleDelete = async (item, type) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
-    setDeletingId(item.id || item.createdAt || item.time || item.email);
+    setDeletingId(item.id || item.createdAt || item.time);
     try {
       const res = await fetch("/api/my-number", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          id: item.id,
-          createdAt: item.createdAt,
-          time: item.time,
-          comment: item.comment,
-          email: item.email,
-          city: item.city,
-        }),
+        body: JSON.stringify({ type, id: item.id, createdAt: item.createdAt, time: item.time, comment: item.comment, email: item.email, city: item.city }),
       });
       if (res.ok) {
         fetchData();
@@ -273,22 +214,7 @@ export default function AdminDashboard() {
           </h1>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
-          {syncAlert && (
-            <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl font-medium">
-              {syncAlert}
-            </span>
-          )}
-          {data.hiddenUsersCount > 0 && (
-            <button
-              onClick={handleRestoreUsers}
-              disabled={restoring}
-              className="flex items-center gap-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 px-3.5 py-2 rounded-xl text-xs font-semibold transition"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${restoring ? "animate-spin" : ""}`} />
-              <span>Restore {data.hiddenUsersCount} Hidden</span>
-            </button>
-          )}
+        <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 bg-zinc-900/90 border border-zinc-800 px-3 py-2 rounded-xl text-xs text-zinc-400">
             <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
             <span>Upstash Redis: <strong className="text-emerald-400 font-medium">Connected</strong></span>
@@ -346,8 +272,8 @@ export default function AdminDashboard() {
             </div>
             <div className="text-3xl font-bold tracking-tight text-white">{data.users.length}</div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
-              <span className="text-violet-400 font-semibold">{data.totalRegisteredInUpstash} in Upstash</span>
-              <span>• {data.hiddenUsersCount > 0 ? `${data.hiddenUsersCount} hidden` : "All synced"}</span>
+              <span className="text-violet-400 font-semibold">Signups</span>
+              <span>• Verified accounts</span>
             </div>
           </div>
 
@@ -610,11 +536,6 @@ export default function AdminDashboard() {
                     <div className="space-y-0.5">
                       <p className="font-semibold text-sm text-zinc-100">{u.name}</p>
                       <p className="text-xs text-violet-400">{u.email}</p>
-                      {(u.visitCount > 0) && (
-                        <p className="text-[11px] text-zinc-400 font-mono">
-                          Total Site Sessions: <strong className="text-emerald-400">{u.visitCount}</strong>
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-xs text-zinc-400 font-mono flex items-center gap-1.5">
@@ -623,9 +544,9 @@ export default function AdminDashboard() {
                       </span>
                       <button
                         onClick={() => handleDelete(u, "users")}
-                        disabled={deletingId === (u.id || u.createdAt || u.email)}
+                        disabled={deletingId === (u.id || u.createdAt)}
                         className="text-zinc-600 hover:text-red-400 p-2 rounded-xl hover:bg-zinc-800 transition"
-                        title="Hide user from dashboard"
+                        title="Delete record"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
