@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Please try again." });
 
   try {
     const { ingredients, exclude, mode, sittings, caloriesPerSitting, totalCalories, lang, cuisine, location } = req.body;
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({ contents: [{ parts: [{ text: planPrompt }] }], generationConfig: { temperature: 0.9 } })
       });
       const geminiData = await geminiRes.json();
-      if (!geminiRes.ok) return res.status(500).json({ error: geminiData.error?.message || "Gemini failed" });
+      if (!geminiRes.ok) return res.status(500).json({ error: "I couldn't create a recipe right now. Please try again." });
       let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
       text = text.replace(/```json/g, "").replace(/```/g, "").trim();
       let parsed = JSON.parse(text);
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9 } })
     });
     const geminiData = await geminiRes.json();
-    if (!geminiRes.ok) return res.status(500).json({ error: geminiData.error?.message || "Gemini failed" });
+    if (!geminiRes.ok) return res.status(500).json({ error: "I couldn't create a recipe right now. Please try again." });
     let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
     let parsed = JSON.parse(text);
@@ -151,5 +151,5 @@ export default async function handler(req, res) {
       mode: recipe.mode || mode, leftoverUsed: isLeftover || !!recipe.leftoverUsed
     };
     return res.status(200).json({ recipe: safeRecipe });
-  } catch (e) { return res.status(500).json({ error: e.message || "Failed" }); }
+  } catch (e) { return res.status(500).json({ error: "Something went wrong. Please try again." }); }
 }
