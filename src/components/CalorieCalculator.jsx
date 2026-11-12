@@ -15,7 +15,7 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const key = user?.email ? `didi_kcal_${user.email}_${today}` : `didi_kcal_guest_${today}`;
   const [eaten, setEaten] = useState(() => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } });
   const [text, setText] = useState("");
-  const [show, setShow] = useState(true);
+  const [show, setShow] = useState(false);
   const [isCalc, setIsCalc] = useState(false);
   const [err, setErr] = useState("");
   const [aiNote, setAiNote] = useState("");
@@ -41,7 +41,6 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
   const weekly = getWeeklyKcal(user);
   const maxWeek = Math.max(...weekly.map(w => w.total), target);
 
-  // ---------- GUEST LIMIT: 3 FREE TRIES ----------
   const [guestCount, setGuestCount] = useState(() => getGuestCount());
   const isGuest = !user?.email;
   const limitReached = isGuest && guestCount >= FREE_LIMIT;
@@ -65,7 +64,6 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
     else setErr("You've used your 3 free tries — Login to continue unlimited.");
   };
 
-  // ---------- AUTO-SYNC TO CLOUD ----------
   const syncCloud = () => {
     if (!user?.email) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
@@ -193,7 +191,6 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
       </button>
       {show && (
         <div className="mt-4">
-          {/* GUEST TRIES BANNER */}
           {isGuest && !limitReached && (
             <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-3 flex items-center justify-between">
               <p className="text-[12px] font-bold text-amber-800">🎁 {triesLeft} / 3 free tries left — test it out!</p>
@@ -207,7 +204,6 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
               <button onClick={handleRequireAuth} className="mt-3 h-10 px-5 bg-white text-black rounded-full text-[12px] font-bold">Login / Register →</button>
             </div>
           )}
-
           <div className={`${theme.softBg} rounded-2xl p-4 mb-3`}>
             <div className="flex justify-between text-[13px] font-bold"><span className="flex items-center gap-1.5"><Flame size={15} className="text-orange-500" /> Eaten: {totalEaten} kcal</span><span>{over ? `Over by ${Math.abs(left)}` : `${left} left`}</span></div>
             <div className="h-3 bg-white rounded-full mt-2 overflow-hidden"><div className={`h-full rounded-full transition-all ${over ? 'bg-red-500' : `bg-gradient-to-r ${theme.btn}`}`} style={{ width: `${pct}%` }} /></div>
