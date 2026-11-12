@@ -38,7 +38,6 @@ const UNIT_RATES_NGN = [
   { keywords: ["water"], unitPrice: 0, defaultQty: 1, unitType: "ml" },
 ];
 
-// Parses natural text like "5000", "5,000", "5k", "1.5k", "five thousand", "two hundred and fifty"
 function parseSmartPrice(input) {
   if (!input) return 0;
   let str = String(input)
@@ -49,7 +48,6 @@ function parseSmartPrice(input) {
 
   if (!str) return 0;
 
-  // 1. Handle shorthand suffixes like "5k", "1.5k", "2m"
   const suffixMatch = str.match(/^(\d+(?:\.\d+)?)\s*(k|thousand|m|million)$/);
   if (suffixMatch) {
     const num = parseFloat(suffixMatch[1]);
@@ -57,12 +55,10 @@ function parseSmartPrice(input) {
     return Math.round(num * mult);
   }
 
-  // 2. Handle pure digits (e.g. "5000" or "500.50")
   if (/^\d+(?:\.\d+)?$/.test(str)) {
     return Math.round(parseFloat(str));
   }
 
-  // 3. Handle English number words (e.g. "five thousand", "one thousand five hundred")
   const SMALL = {
     zero: 0, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5,
     six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
@@ -200,10 +196,10 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
     load();
   }, [selectedLoc]);
 
-  // Live preview of parsed amount as user types "5k" or "five thousand"
   const parsedPreview = parseSmartPrice(reportPrice);
 
-  const handleReport = async () => {
+  const handleReport = async (e) => {
+    if (e) e.preventDefault();
     const finalItem = (reportItem === "__other__" ? customItem : reportItem).trim();
     if (!finalItem || !reportPrice.trim()) {
       setReportMsg("Pick an ingredient + enter price");
@@ -334,7 +330,7 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
           ✏️ Edit / Report Price in {selectedLoc === "lagos" ? "Nigeria" : "Your Location"}
         </button>
       ) : (
-        <div className="mt-3 bg-stone-50 border border-stone-200 rounded-2xl p-3">
+        <div className="mt-3 bg-stone-50 border border-stone-200 rounded-2xl p-3" onSubmit={(e) => e.preventDefault()}>
           <p className="text-[12px] font-bold mb-2">
             Update price in {selectedLoc === "lagos" ? "Nigeria (₦)" : "Abroad ($)"}:
           </p>
