@@ -50,12 +50,22 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [showBots, setShowBots] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [lastSyncedCount, setLastSyncedCount] = useState(null);
+  const [syncAlert, setSyncAlert] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/my-number");
       const json = await res.json();
+      
+      const newUsersCount = (json.users || []).length;
+      if (lastSyncedCount !== null && lastSyncedCount !== newUsersCount) {
+        setSyncAlert(true);
+        setTimeout(() => setSyncAlert(false), 5000);
+      }
+      setLastSyncedCount(newUsersCount);
+
       setData({
         visitors: json.visitors || [],
         users: json.users || [],
@@ -68,8 +78,20 @@ export default function AdminDashboard() {
     }
   };
 
+  // Initial fetch + Auto-refresh when switching back to this tab
   useEffect(() => {
     fetchData();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -215,6 +237,11 @@ export default function AdminDashboard() {
         </div>
         
         <div className="flex items-center gap-3">
+          {syncAlert && (
+            <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl font-medium animate-pulse">
+              Account sync updated!
+            </span>
+          )}
           <div className="hidden md:flex items-center gap-2 bg-zinc-900/90 border border-zinc-800 px-3 py-2 rounded-xl text-xs text-zinc-400">
             <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
             <span>Upstash Redis: <strong className="text-emerald-400 font-medium">Connected</strong></span>
@@ -536,6 +563,9 @@ export default function AdminDashboard() {
                     <div className="space-y-0.5">
                       <p className="font-semibold text-sm text-zinc-100">{u.name}</p>
                       <p className="text-xs text-violet-400">{u.email}</p>
+                      {u.visitCount && (
+                        <p className="text-[11px] text-zinc-400 font-mono">Total Site Sessions: <strong className="text-emerald-400">{u.visitCount}</strong></p>
+                      )}
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-xs text-zinc-400 font-mono flex items-center gap-1.5">
