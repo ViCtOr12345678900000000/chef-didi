@@ -17,19 +17,6 @@ import {
   Activity,
   Layers
 } from "lucide-react";
-import { 
-  AreaChart, 
-  Area, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
-  Cell 
-} from "recharts";
 
 const PAGE_SIZE = 15;
 
@@ -51,8 +38,6 @@ function isOldBot(v) {
   if (city === "unknown" && v.device === "Other") return true;
   return false;
 }
-
-const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#06b6d4"];
 
 export default function AdminDashboard() {
   const [data, setData] = useState({ visitors: [], users: [], reviews: [] });
@@ -109,7 +94,7 @@ export default function AdminDashboard() {
 
   const hiddenBotCount = allVisitors.length - realVisitors.length;
 
-  // Country Aggregation for Top Cards / Filtering
+  // Country Aggregation
   const countries = useMemo(() => {
     const map = {};
     realVisitors.forEach(v => {
@@ -119,32 +104,15 @@ export default function AdminDashboard() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [realVisitors]);
 
-  // Prepare chart data for Country Distribution (Top 5 + Others)
-  const countryChartData = useMemo(() => {
-    const sorted = [...countries];
-    if (sorted.length <= 5) {
-      return sorted.map(([name, value]) => ({ name, value }));
-    }
-    const top5 = sorted.slice(0, 5);
-    const othersSum = sorted.slice(5).reduce((acc, curr) => acc + curr[1], 0);
-    return [
-      ...top5.map(([name, value]) => ({ name, value })),
-      { name: "Others", value: othersSum }
-    ];
+  // Top Regions Breakdown for custom visual progress bars
+  const topCountries = useMemo(() => {
+    const maxCount = countries.length > 0 ? countries[0][1] : 1;
+    return countries.slice(0, 5).map(([name, count]) => ({
+      name,
+      count,
+      percentage: Math.round((count / maxCount) * 100),
+    }));
   }, [countries]);
-
-  // Prepare time-series activity chart data (grouped by date)
-  const activityChartData = useMemo(() => {
-    const map = {};
-    realVisitors.forEach(v => {
-      if (!v.time) return;
-      const dateStr = new Date(v.time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      map[dateStr] = (map[dateStr] || 0) + 1;
-    });
-    return Object.entries(map)
-      .map(([date, count]) => ({ date, visitors: count }))
-      .reverse(); // chronological order for charts
-  }, [realVisitors]);
 
   // Filtered datasets per tab
   const filteredVisitors = useMemo(() => {
@@ -227,15 +195,14 @@ export default function AdminDashboard() {
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition"></div>
-            <div className="flex items-center justify-between text-zinc-400 mb-2 relative z-10">
+            <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Live Visitors</span>
               <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
                 <Eye className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-3xl font-bold tracking-tight text-white relative z-10">{realVisitors.length}</div>
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400 relative z-10">
+            <div className="text-3xl font-bold tracking-tight text-white">{realVisitors.length}</div>
+            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-emerald-400 font-semibold flex items-center">
                 <TrendingUp className="w-3 h-3 mr-0.5" /> Active
               </span>
@@ -244,114 +211,114 @@ export default function AdminDashboard() {
           </div>
 
           <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition"></div>
-            <div className="flex items-center justify-between text-zinc-400 mb-2 relative z-10">
+            <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Global Regions</span>
               <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
                 <Globe className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-3xl font-bold tracking-tight text-white relative z-10">{countries.length}</div>
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400 relative z-10">
+            <div className="text-3xl font-bold tracking-tight text-white">{countries.length}</div>
+            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-blue-400 font-semibold">Countries Reach</span>
               <span>• International footprint</span>
             </div>
           </div>
 
           <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition"></div>
-            <div className="flex items-center justify-between text-zinc-400 mb-2 relative z-10">
+            <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">Registered Users</span>
               <div className="p-2 bg-violet-500/10 rounded-xl border border-violet-500/20 text-violet-400">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-3xl font-bold tracking-tight text-white relative z-10">{data.users.length}</div>
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400 relative z-10">
+            <div className="text-3xl font-bold tracking-tight text-white">{data.users.length}</div>
+            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-violet-400 font-semibold">Signups</span>
               <span>• Verified profiles</span>
             </div>
           </div>
 
           <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-900/40 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition"></div>
-            <div className="flex items-center justify-between text-zinc-400 mb-2 relative z-10">
+            <div className="flex items-center justify-between text-zinc-400 mb-2">
               <span className="text-[11px] font-bold tracking-wider uppercase text-zinc-400">User Feedback</span>
               <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
                 <Star className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-3xl font-bold tracking-tight text-white relative z-10">{data.reviews.length}</div>
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400 relative z-10">
+            <div className="text-3xl font-bold tracking-tight text-white">{data.reviews.length}</div>
+            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-400">
               <span className="text-amber-400 font-semibold">Reviews</span>
               <span>• Customer satisfaction</span>
             </div>
           </div>
         </div>
 
-        {/* Analytics Visualizations Grid (Recharts) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Traffic Trend Area Chart */}
-          <div className="lg:col-span-2 bg-zinc-900/70 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-violet-500/10 rounded-lg text-violet-400 border border-violet-500/20">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-200">Visitor Velocity Trends</h3>
-                  <p className="text-[11px] text-zinc-500">Historical unique visitor volume over time</p>
-                </div>
-              </div>
-            </div>
-            <div className="h-64 w-full mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={activityChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="visitorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "12px", fontSize: "12px", color: "#f4f4f5" }}
-                  />
-                  <Area type="monotone" dataKey="visitors" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#visitorGradient)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Regional Distribution Bar / Pie representation */}
-          <div className="bg-zinc-900/70 border border-zinc-800/80 p-5 rounded-2xl shadow-xl backdrop-blur-md flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+        {/* Custom Professional Analytics Breakdown Panels */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Regions Progress Bar breakdown */}
+          <div className="bg-zinc-900/70 border border-zinc-800/80 p-6 rounded-2xl shadow-xl backdrop-blur-md space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20">
                   <Globe className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-200">Top Regions</h3>
-                  <p className="text-[11px] text-zinc-500">Traffic origin breakdown</p>
+                  <h3 className="text-sm font-bold text-zinc-200">Top Regions Breakdown</h3>
+                  <p className="text-[11px] text-zinc-500">Distribution of visitor traffic by country</p>
                 </div>
               </div>
             </div>
-            <div className="h-64 w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={countryChartData} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                  <XAxis type="number" stroke="#71717a" fontSize={10} hide />
-                  <YAxis dataKey="name" type="category" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} width={85} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a", borderRadius: "12px", fontSize: "12px", color: "#f4f4f5" }}
-                  />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                    {countryChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-3 pt-2">
+              {topCountries.map((item, index) => (
+                <div key={index} className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-medium text-zinc-300">{item.name}</span>
+                    <span className="text-zinc-400 font-mono">{item.count} visitors</span>
+                  </div>
+                  <div className="w-full bg-zinc-800/80 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-violet-500 to-blue-500 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${item.percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+              {topCountries.length === 0 && (
+                <p className="text-xs text-zinc-500 text-center py-6">No location metrics available</p>
+              )}
+            </div>
+          </div>
+
+          {/* Quick System Overview Panel */}
+          <div className="bg-zinc-900/70 border border-zinc-800/80 p-6 rounded-2xl shadow-xl backdrop-blur-md flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 bg-violet-500/10 rounded-lg text-violet-400 border border-violet-500/20">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-200">Dashboard Metrics Health</h3>
+                  <p className="text-[11px] text-zinc-500">Real-time filtering & synchronization overview</p>
+                </div>
+              </div>
+              <div className="space-y-3 pt-2 text-xs">
+                <div className="flex justify-between py-2 border-b border-zinc-800/60">
+                  <span className="text-zinc-400">Total Raw Logs Captured</span>
+                  <span className="font-mono font-bold text-white">{allVisitors.length}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-zinc-800/60">
+                  <span className="text-zinc-400">Datacenter / Crawler Bots Filtered</span>
+                  <span className="font-mono font-bold text-amber-400">{hiddenBotCount}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-zinc-400">Verified Human-Like Traffic</span>
+                  <span className="font-mono font-bold text-emerald-400">{realVisitors.length}</span>
+                </div>
+              </div>
+            </div>
+            <div className="pt-4 mt-4 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>Environment: Vercel Serverless</span>
+              <span className="text-violet-400 font-medium">Secure API Mode</span>
             </div>
           </div>
         </div>
