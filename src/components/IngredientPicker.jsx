@@ -1,6 +1,6 @@
 import { Search, PlusCircleIcon, Delete, Clock, CookingPot, Sparkles, X, MoonStar, Salad, Soup, Flag, Plane, Dices, Globe, Check, Lock } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import AIResponse from "./AIResponse";
+import AIResponse from "./AIResponse"; 
 import Footer from "./Footer";
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, caloriesFor, addHistory, progressQuests } from "../lib/didi";
 
