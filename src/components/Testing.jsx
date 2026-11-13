@@ -1,4 +1,4 @@
-import { getLivePrices } from '../lib/gemini-prices.js'; 
+import { getLivePrices } from '../lib/gemini-prices.js';
 
 export default async function handler(req, res) {
   // ===== NEW JOB: Get Current Price button =====
