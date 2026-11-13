@@ -1,8 +1,13 @@
 @import "tailwindcss";
+
 .font-display {
   font-family: 'Fraunces', serif;
   letter-spacing: -0.02em;
 }
+
 body {
   font-family: 'Manrope', sans-serif;
+  background: #FAF9F6;
+  color: #1A1A2E;
+  -webkit-font-smoothing: antialiased;
 }
