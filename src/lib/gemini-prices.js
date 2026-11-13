@@ -32,7 +32,7 @@ Return ONLY valid JSON:
 Rules: If no price from last 14 days, set price to null. DO NOT INVENT. Retail / per-kg prices only.
 `;
 
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
