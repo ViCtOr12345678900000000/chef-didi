@@ -32,7 +32,7 @@ Return ONLY valid JSON:
 Rules: If no price from last 14 days, set price to null. DO NOT INVENT. Retail / per-kg prices only.
 `;
 
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
   let lastError = '';
   for (const model of models) {
     try {
