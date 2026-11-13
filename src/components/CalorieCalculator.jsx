@@ -3,7 +3,7 @@ import { Flame, Droplets, Scale, Camera, ImagePlus, Trash2, Sparkles, Eye, Plus,
 import { GOALS, THEMES, caloriesFor, getStreak, getWeeklyKcal, getWater, setWater, getWeights, addWeight, dateStr, getPrefs } from "../lib/didi";
 
 const FREE_LIMIT = 3;
-const GUEST_KEY = "didi_guest_kcal_count";
+const GUEST_KEY = "didi_guest_kcal_count"; 
 
 function getGuestCount() {
   try { return parseInt(localStorage.getItem(GUEST_KEY) || "0", 10) || 0; } catch { return 0; }
