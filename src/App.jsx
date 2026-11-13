@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChefHat, Menu, Home, CookingPot, Wallet, ShoppingBag, MoreHorizontal } from 'lucide-react';
+import { ChefHat, Menu, Home, CookingPot, Calculator, Star, MoreHorizontal } from 'lucide-react';
 import IngredientPicker from './components/IngredientPicker';
 import AuthModal from './components/AuthModal';
 import AdminDashboard from './components/AdminDashboard';
@@ -8,39 +8,75 @@ import Testing from './components/Testing';
 import Sidebar from './components/Sidebar';
 import AdSlot from './components/AdSlot';
 import Footer from './components/Footer';
+import CalorieCalculator from './components/CalorieCalculator';
+import WeightTrend from './components/WeightTrend';
 import { THEMES, getSession, logoutUser, getPrefs, savePrefs, t } from './lib/didi';
 
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 mins
 
-function BudgetPreview({ theme, onGoTesting }) {
+// --- Calculator tab: Calorie Calculator + Cal vs Weight in one place ---
+function CalculatorTab({ user, theme, themeId, lang, onRequireAuth }) {
+  const [goal] = useState(() => user?.email ? (getPrefs(user.email).goal || 'normal') : 'normal');
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setVersion(v => v + 1);
+    window.addEventListener("didi-kcal-updated", bump);
+    window.addEventListener("didi-data-restored", bump);
+    return () => {
+      window.removeEventListener("didi-kcal-updated", bump);
+      window.removeEventListener("didi-data-restored", bump);
+    };
+  }, []);
   return (
-    <div className="px-4 max-w-[600px] mx-auto">
-      <h2 className="text-xl font-bold text-[#1A1A2E]">💰 Cook With ₦5k</h2>
-      <p className="text-stone-500 text-sm mt-1">Pick your market + budget, Didi shows what to buy today.</p>
-      <div className="bg-white border rounded-2xl p-4 mt-4 shadow-sm">
-        <p className="text-sm font-bold">Mile 12 • ₦5,000 basket preview</p>
-        <div className="mt-3 space-y-2 text-sm">
-          <div className="flex justify-between bg-stone-50 p-2 rounded-lg"><span>Rice</span><b>₦2,800</b></div>
-          <div className="flex justify-between bg-stone-50 p-2 rounded-lg"><span>Tomato</span><b>₦1,500</b></div>
-          <div className="flex justify-between bg-stone-50 p-2 rounded-lg"><span>Pepper</span><b>₦800</b></div>
-        </div>
-        <button onClick={onGoTesting} className="w-full mt-4 bg-green-600 text-white font-bold py-3 rounded-xl text-sm">Test Live Prices in #testing →</button>
-      </div>
+    <div className="px-4 max-w-[600px] mx-auto space-y-4">
+      <h2 className="text-xl font-bold text-[#1A1A2E]">🔥 Calorie Calculator</h2>
+      <p className="text-stone-500 text-sm -mt-2">Track what you eat, see your calories vs weight.</p>
+      <CalorieCalculator key={version} user={user} goal={goal} themeId={themeId} lang={lang} customCalories={null} onRequireAuth={onRequireAuth} />
+      <WeightTrend user={user} themeId={themeId} />
     </div>
   );
 }
 
-function OrderPreview({ theme }) {
+// --- Review tab ---
+function ReviewTab({ user, onRequireAuth }) {
+  const [name, setName] = useState(user?.name || '');
+  const [text, setText] = useState('');
+  const [stars, setStars] = useState(5);
+  const [reviews, setReviews] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('didi_reviews') || '[]'); } catch { return []; }
+  });
+  const submit = () => {
+    if (!text.trim()) return;
+    if (!user?.email) { onRequireAuth?.(); return; }
+    const r = { id: Date.now(), name: name || user.name || 'Didi User', text: text.trim(), stars, date: new Date().toLocaleDateString() };
+    const next = [r, ...reviews].slice(0, 50);
+    setReviews(next);
+    localStorage.setItem('didi_reviews', JSON.stringify(next));
+    setText('');
+  };
   return (
-    <div className="px-4 max-w-[600px] mx-auto">
-      <h2 className="text-xl font-bold text-[#1A1A2E]">🛵 Order Food Near Me</h2>
-      <p className="text-stone-500 text-sm mt-1">Too lazy to cook? Order from a home cook near you.</p>
-      <div className="bg-white border rounded-2xl p-4 mt-4 shadow-sm">
-        <p className="font-bold text-sm">Mama T's Kitchen • Surulere</p>
-        <p className="text-xs text-stone-500">Jollof ₦3,500 • Egusi + Semo ₦4,000</p>
-        <a href="https://wa.me/2348000000000?text=Hi%20Mama%20T%2C%20I%20want%20to%20order%20Jollof" target="_blank" className="block text-center mt-3 bg-green-600 text-white font-bold py-3 rounded-xl text-sm">Order on WhatsApp →</a>
+    <div className="px-4 max-w-[600px] mx-auto space-y-4">
+      <h2 className="text-xl font-bold text-[#1A1A2E]">⭐ Reviews</h2>
+      <p className="text-stone-500 text-sm -mt-2">Did Didi save your ingredients today? Tell us.</p>
+      <div className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex gap-1">
+          {[1,2,3,4,5].map(s => (
+            <button key={s} onClick={() => setStars(s)} className="text-2xl">{s <= stars ? '⭐' : '☆'}</button>
+          ))}
+        </div>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="w-full h-11 px-3 bg-stone-50 border rounded-xl text-sm outline-none" />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. I had rice and chicken, Didi made fried rice. No waste!" className="w-full px-3 py-2 bg-stone-50 border rounded-xl text-sm outline-none min-h-[80px]" />
+        <button onClick={submit} className="w-full bg-purple-600 text-white font-bold py-3 rounded-xl text-sm">Post Review</button>
       </div>
-      <p className="text-xs text-stone-400 mt-3 text-center">Full vendor list lives in #testing for now.</p>
+      {reviews.length === 0 ? (
+        <p className="text-center text-stone-400 text-sm py-6">No reviews yet — be the first.</p>
+      ) : reviews.map(r => (
+        <div key={r.id} className="bg-white border rounded-2xl p-4 shadow-sm">
+          <p className="font-bold text-sm">{r.name} <span className="font-normal text-stone-400 text-xs">• {r.date}</span></p>
+          <p className="text-sm mt-0.5">{'⭐'.repeat(r.stars)}</p>
+          <p className="text-sm text-stone-600 mt-1">{r.text}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -52,20 +88,6 @@ export default function App() {
   const [lang, setLang] = useState('en');
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
-  const [lockedMsg, setLockedMsg] = useState('');
-
-  // 🔒 FINAL LOCK RULE - Cook is NOT here, so Cook stays UNLOCKED
-  // Home ✅ | Cook ✅ (main site) | Budget 🔒 | Order 🔒 | More ✅
-  const LOCKED_TABS = ['budget', 'order'];
-
-  const handleTabClick = (tabId) => {
-    if (LOCKED_TABS.includes(tabId)) {
-      setLockedMsg(tabId === 'budget' ? 'Cook With ₦5k' : 'Order Food Near Me');
-      setTimeout(() => setLockedMsg(''), 2500);
-      return;
-    }
-    setActiveTab(tabId);
-  };
 
   const theme = THEMES[themeId] || THEMES.purple;
   const handleThemeChange = (newTheme) => setThemeId(newTheme);
@@ -189,18 +211,15 @@ export default function App() {
 
   const prefs = user?.email ? getPrefs(user.email) : null;
 
-  // Secret Hidden Routes - #testing stays OPEN for us
   if (typeof window !== 'undefined' && window.location.hash === '#advertise') return <Advertise />;
   if (typeof window !== 'undefined' && window.location.hash === '#my-number') return <AdminDashboard />;
   if (typeof window !== 'undefined' && window.location.hash === '#testing') return <Testing />;
 
-  const goTesting = () => { window.location.hash = '#testing'; window.location.reload(); };
-
   const TABS = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'cook', label: 'Cook', icon: CookingPot },
-    { id: 'budget', label: '₦5k', icon: Wallet },
-    { id: 'order', label: 'Order', icon: ShoppingBag },
+    { id: 'calculator', label: 'Calculator', icon: Calculator },
+    { id: 'review', label: 'Review', icon: Star },
     { id: 'more', label: 'More', icon: MoreHorizontal },
   ];
 
@@ -233,27 +252,16 @@ export default function App() {
 
       {activeTab === 'home' && (
         <div className="px-4 max-w-[600px] mx-auto space-y-3">
-          {/* Cook - OPEN - Main Site */}
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
             <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl">🍲</div>
             <div className="flex-1"><p className="font-bold text-[16px]">Cook With What I Have</p><p className="text-stone-500 text-[13px]">Enter ingredients → Get recipe</p></div>
             <span>→</span>
           </button>
-
-          {/* Budget - LOCKED */}
-          <button onClick={() => handleTabClick('budget')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
-            <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center text-2xl">💰</div>
-            <div className="flex-1"><p className="font-bold text-[16px]">Cook With ₦5k</p><p className="text-stone-500 text-[13px]">See today's prices in your market</p></div>
-            <span className="text-[11px] bg-stone-800 text-white px-2.5 py-1 rounded-full font-bold">🔒 SOON</span>
+          <button onClick={() => setActiveTab('calculator')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 active:scale-[0.98] transition">
+            <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-2xl">🔥</div>
+            <div className="flex-1"><p className="font-bold text-[16px]">Calorie Calculator</p><p className="text-stone-500 text-[13px]">Calories + weight chart</p></div>
+            <span>→</span>
           </button>
-
-          {/* Order - LOCKED */}
-          <button onClick={() => handleTabClick('order')} className="w-full text-left bg-white border rounded-2xl p-4 shadow-sm flex items-center gap-4 opacity-70">
-            <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-2xl">🛵</div>
-            <div className="flex-1"><p className="font-bold text-[16px]">Order Food Near Me</p><p className="text-stone-500 text-[13px]">Too lazy? Order from home cooks</p></div>
-            <span className="text-[11px] bg-stone-800 text-white px-2.5 py-1 rounded-full font-bold">🔒 SOON</span>
-          </button>
-
           <div className="pt-2">
             <p className="text-[11px] text-stone-400 text-center">Popular today • Jollof • Egusi • Fried Rice</p>
           </div>
@@ -268,41 +276,29 @@ export default function App() {
         </div>
       )}
 
-      {activeTab === 'budget' && <BudgetPreview theme={theme} onGoTesting={goTesting} />}
-      {activeTab === 'order' && <OrderPreview theme={theme} />}
+      {activeTab === 'calculator' && <CalculatorTab user={user} theme={theme} themeId={themeId} lang={lang} onRequireAuth={() => setShowAuth(true)} />}
+      {activeTab === 'review' && <ReviewTab user={user} onRequireAuth={() => setShowAuth(true)} />}
 
       {activeTab === 'more' && (
         <div className="px-4 max-w-[600px] mx-auto space-y-3">
-          <h2 className="font-bold text-lg">More Tools</h2>
-          <p className="text-stone-500 text-sm">All your old tools are still here — just moved out of Home so Home is clean.</p>
-          <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">📊 Kcal Calculator <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
+          <h2 className="font-bold text-lg">More</h2>
+          <p className="text-stone-500 text-sm">We’ll decide what lives here later — for now it’s just a placeholder.</p>
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">♻️ Leftover Rescue <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">📅 3-Day Plan <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
           <button onClick={() => setActiveTab('cook')} className="w-full text-left bg-white border rounded-2xl p-4">❤️ Favourites & History <span className="text-stone-400 text-xs">— inside Cook tab for now</span></button>
-          <div className="bg-stone-50 rounded-2xl p-4 text-sm">
-            <p className="font-bold">Settings</p>
-            <p className="text-stone-500 text-xs mt-1">Goal, Theme, Language — change them inside Cook tab.</p>
-          </div>
         </div>
       )}
 
-      {lockedMsg && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-black text-white text-sm font-bold px-4 py-2.5 rounded-full shadow-lg whitespace-nowrap">
-          🔒 {lockedMsg} — Coming Soon
-        </div>
-      )}
-
-      {/* ===== FOOTER - Cook UNLOCKED, leads to main site ===== */}
+      {/* ===== FOOTER ===== */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-40">
         <div className="max-w-[600px] mx-auto flex justify-around py-2 px-2">
           {TABS.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            const isLocked = LOCKED_TABS.includes(tab.id);
             return (
-              <button key={tab.id} onClick={() => handleTabClick(tab.id)} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl min-w-[60px] ${isActive ? `${theme.accent} bg-purple-50` : 'text-stone-400'} ${isLocked ? 'opacity-50' : ''}`}>
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl min-w-[60px] ${isActive ? `${theme.accent} bg-purple-50` : 'text-stone-400'}`}>
                 <Icon size={20} />
-                <span className="text-[11px] font-bold flex items-center gap-1">{isLocked ? '🔒 ' : ''}{tab.label}</span>
+                <span className="text-[11px] font-bold">{tab.label}</span>
               </button>
             );
           })}
