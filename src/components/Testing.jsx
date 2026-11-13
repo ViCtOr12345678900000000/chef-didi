@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 
-
 // Fallback if Gemini hasn't run yet - real prices from 10 Nov 2026
 const FALLBACK_PRICES = {
   updated: "10 Nov 2026",
@@ -43,31 +42,45 @@ export default function Testing() {
     } catch { /* use fallback */ }
   }, []);
 
-  // FIXED: now calls /api/debug, not /api/prices-refresh
+  // FIXED: now calls /api/debug, not /api/prices-refresh + GUARD against guessing
   const getCurrentPrice = async () => {
-  setLoading(true);
-  setStatus('🔍 Trying...');
-  try {
-    const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
-    const text = await res.text(); // <-- read as TEXT first, not json
-    console.log('RAW:', text.slice(0, 500));
+    setLoading(true);
+    setStatus('🔍 Trying...');
     try {
-      const json = JSON.parse(text);
-      if (!res.ok) throw new Error(json.error || `Server ${res.status}`);
-      const data = json.data || json;
-      if (!data || !Array.isArray(data.items)) throw new Error('No items: ' + text.slice(0, 200));
-      setPrices(data);
-      try { localStorage.setItem('didi_live_prices', JSON.stringify(data)); } catch {}
-      setStatus(`✅ Updated! ${data.updated} • ${data.source}`);
+      const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
+      const text = await res.text(); // <-- read as TEXT first, not json
+      console.log('RAW:', text.slice(0, 500));
+      try {
+        const json = JSON.parse(text);
+        if (!res.ok) throw new Error(json.error || `Server ${res.status}`);
+        const data = json.data || json;
+        if (!data || !Array.isArray(data.items)) throw new Error('No items: ' + text.slice(0, 200));
+
+        // ===== GUARD: don't save guessed prices =====
+        const withSource = (data.items || []).filter(i => i.sourceUrl && i.sourceUrl.startsWith('http')).length;
+        if (withSource < 6) {
+          setStatus(`⚠️ Gemini guessed - only ${withSource}/12 items had a real source. NOT saved. Your last good prices are still showing. Tap again or check Ola of North.`);
+          setLoading(false);
+          return;
+        }
+        // ===== END GUARD =====
+
+        setPrices(data);
+        try { localStorage.setItem('didi_live_prices', JSON.stringify(data)); } catch {}
+        setStatus(`✅ Updated! ${data.updated} • ${data.source} • ✓ Verified ${withSource}/12 with real sources`);
+      } catch (e) {
+        // Show the REAL server response, not Safari's generic error
+        // Don't overwrite if it's our guard message - guard already returned above
+        if (e.message && e.message.startsWith('Server said')) throw e;
+        setStatus(`❌ Server said (${res.status}): ${text.slice(0, 300)}`);
+      }
     } catch (e) {
-      // Show the REAL server response, not Safari's generic error
-      setStatus(`❌ Server said (${res.status}): ${text.slice(0, 300)}`);
+      if (!e.message?.startsWith('Server said')) {
+        setStatus(`❌ Fetch failed: ${e.message}`);
+      }
     }
-  } catch (e) {
-    setStatus(`❌ Fetch failed: ${e.message}`);
-  }
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   // Safe getter - never crashes if item is missing
   const getItemPrice = (id) => {
@@ -99,6 +112,7 @@ export default function Testing() {
   ];
 
   const items = prices?.items || FALLBACK_PRICES.items;
+  const verifiedCount = items.filter(i => i.sourceUrl && i.sourceUrl.startsWith('http')).length;
 
   return (
     <div className="min-h-screen bg-stone-50 p-4 pb-24">
@@ -113,6 +127,12 @@ export default function Testing() {
               <p className="font-bold text-lg">💰 Live ₦5k Prices - {prices?.market || 'Mile 12'}</p>
               <p className="text-xs text-stone-500">Last updated: {prices?.updated || '10 Nov 2026'}</p>
               <p className="text-xs text-stone-500">Source: {prices?.source || ''}</p>
+              {verifiedCount > 0 && (
+                <p className="text-xs font-bold mt-1 text-green-700">✓ Verified {verifiedCount}/12 with real sources</p>
+              )}
+              {verifiedCount === 0 && (
+                <p className="text-xs font-bold mt-1 text-amber-600">⚠️ Fallback prices - not yet verified by search</p>
+              )}
             </div>
             <span className="text-[11px] bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">● LIVE</span>
           </div>
@@ -132,7 +152,12 @@ export default function Testing() {
           <div className="mt-4 space-y-2">
             {items.map(item => (
               <div key={item.id} className="flex justify-between items-center bg-stone-50 p-2.5 rounded-lg text-sm">
-                <span>{item.emoji} {item.name} <span className="text-stone-400 text-xs">({item.unit})</span></span>
+                <span>
+                  {item.emoji} {item.name} <span className="text-stone-400 text-xs">({item.unit})</span>
+                  {item.sourceUrl && item.sourceUrl.startsWith('http') && (
+                    <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="text-blue-600 text-[11px] ml-1 underline">source ↗</a>
+                  )}
+                </span>
                 <b>{item.price ? `₦${item.price.toLocaleString()}` : '— No data'}</b>
               </div>
             ))}
