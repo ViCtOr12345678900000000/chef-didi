@@ -39,8 +39,10 @@ Rules:
 - Retail / per-kg prices only, Naira, integer only.
 `;
 
-  const models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  // ONE model only - stops burning 3x quota per tap
+  const models = ['gemini-3.5-flash-lite'];
   let lastError = '';
+  let lastStatus = 0;
   for (const model of models) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -53,16 +55,31 @@ Rules:
         })
       });
       const data = await r.json();
-      if (!r.ok) { lastError = data?.error?.message || `Google ${r.status} for ${model}`; continue; }
+      if (!r.ok) {
+        lastError = data?.error?.message || `Google ${r.status} for ${model}`;
+        lastStatus = r.status;
+        if (r.status === 429) break; // quota - DO NOT try next model, just stop
+        continue;
+      }
       let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       if (!text) { lastError = `Empty from ${model}`; continue; }
       text = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(text);
       if (!parsed.items) throw new Error('No items');
       return parsed;
-    } catch (e) { lastError = e.message; continue; }
+    } catch (e) {
+      // Preserve quota error so handler can return 429
+      if (e.message && e.message.toLowerCase().includes('quota')) {
+        lastStatus = 429;
+      }
+      lastError = e.message;
+      if (lastStatus === 429) break;
+      continue;
+    }
   }
-  throw new Error(`Gemini failed: ${lastError}`);
+  const err = new Error(`Gemini failed: ${lastError}`);
+  err.status = lastStatus || 500;
+  throw err;
 }
 
 export default async function handler(req, res) {
@@ -72,7 +89,9 @@ export default async function handler(req, res) {
       const data = await getLivePrices();
       return res.status(200).json({ success: true, data });
     } catch (e) {
-      return res.status(500).json({ error: e.message, stack: String(e.stack || '').slice(0, 500) });
+      // Return 429 so Testing.jsx shows friendly quota message, not 500 stack
+      const status = e.status === 429 || String(e.message || '').toLowerCase().includes('quota') ? 429 : 500;
+      return res.status(status).json({ error: e.message });
     }
   }
 
