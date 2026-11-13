@@ -1,97 +1,96 @@
-import { getLivePrices } from '../lib/gemini-prices.js';
+import { useState, useEffect } from 'react';
 
-export default async function handler(req, res) {
-  // ===== NEW JOB: Get Current Price button =====
-  // Uses debug.js so we stay at 12 api files - no new file needed
-  // Called from Testing.jsx as: /api/debug?action=prices-refresh
-  if (req.query.action === 'prices-refresh' && req.method === 'POST') {
+const DEFAULT_PRICES = [
+  { id: "tomato", name: "Tomato", unit: "1kg", price: 1650, emoji: "🍅" },
+  { id: "rodo", name: "Rodo Pepper", unit: "1kg", price: 1794, emoji: "🌶️" },
+  { id: "tatashe", name: "Tatashe", unit: "1kg", price: 2130, emoji: "🫑" },
+  { id: "shombo", name: "Shombo", unit: "1kg", price: 2000, emoji: "🌶️" },
+  { id: "onion", name: "Onion", unit: "1kg", price: 1728, emoji: "🧅" },
+  { id: "rice_foreign", name: "Foreign Rice", unit: "1 derica", price: 1100, emoji: "🍚" },
+  { id: "rice_local", name: "Local Rice", unit: "1 derica", price: 1000, emoji: "🍚" },
+  { id: "garri_ijebu", name: "Garri Ijebu", unit: "1 paint", price: 1200, emoji: "🥣" },
+  { id: "yam", name: "Yam (medium)", unit: "1 tuber", price: 2350, emoji: "🍠" },
+  { id: "crayfish", name: "Crayfish", unit: "small plate", price: 500, emoji: "🦐" },
+  { id: "seasoning", name: "Seasoning (2 cubes)", unit: "pack", price: 200, emoji: "🧂" },
+  { id: "palm_oil", name: "Palm Oil", unit: "1 bottle 75cl", price: 2800, emoji: "🫙" },
+];
+
+export default function Testing() {
+  const [items, setItems] = useState(DEFAULT_PRICES);
+  const [updated, setUpdated] = useState("10 Nov 2026");
+  const [source, setSource] = useState("Mile 12 via Ola of North + Lagos Ministry");
+  const [notes, setNotes] = useState("Onion is expensive this week");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
     try {
-      const data = await getLivePrices();
-      return res.status(200).json({ success: true, data });
+      const saved = localStorage.getItem('chef-didi-prices');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.items)) {
+          setItems(parsed.items);
+          if (parsed.updated) setUpdated(parsed.updated);
+          if (parsed.source) setSource(parsed.source);
+          if (parsed.notes) setNotes(parsed.notes);
+        }
+      }
+    } catch (e) { /* ignore, use defaults */ }
+  }, []);
+
+  const refresh = async () => {
+    setLoading(true);
+    setStatus("");
+    try {
+      const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      const data = json.data || json;
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        setItems(data.items);
+        if (data.updated) setUpdated(data.updated);
+        if (data.source) setSource(data.source);
+        if (data.notes) setNotes(data.notes);
+        try { localStorage.setItem('chef-didi-prices', JSON.stringify(data)); } catch {}
+        setStatus("✅ Updated!");
+      } else {
+        throw new Error("No items returned");
+      }
     } catch (e) {
-      return res.status(500).json({ error: e.message });
-    }
-  }
-
-  // ===== YOUR OLD DEBUG.JS - UNCHANGED BELOW =====
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return res.status(200).json({ error: "NO ENV VARS", hasUrl: !!url, hasToken: !!token });
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const parseOne = (item) => {
-    try {
-      let s = typeof item === "string" ? item : JSON.stringify(item);
-      try { s = decodeURIComponent(s); } catch {}
-      try { s = decodeURIComponent(s); } catch {}
-      const p = JSON.parse(s);
-      if (Array.isArray(p)) return p;
-      return p;
-    } catch {
-      return null;
+      setStatus(`❌ Could not fetch: ${e.message}. Showing last saved prices.`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const readUsers = async () => {
-    const r = await fetch(`${url}/lrange/users/0/-1`, { headers });
-    const data = await r.json();
-    const raw = data.result || [];
-    let users = [];
-    for (const item of raw) {
-      const parsed = parseOne(item);
-      if (Array.isArray(parsed)) users.push(...parsed);
-      else if (parsed) users.push(parsed);
-    }
-    return { raw, users };
-  };
+  return (
+    <div style={{ background: '#fff', borderRadius: 16, padding: 16, margin: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>💰 Live ₦5k Prices - Mile 12</div>
+          <div style={{ fontSize: 12, color: '#666' }}>Last updated: {updated}</div>
+          <div style={{ fontSize: 12, color: '#666' }}>Source: {source}</div>
+        </div>
+        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>● LIVE</span>
+      </div>
 
-  const saveUsers = async (users) => {
-    await fetch(`${url}/del/users`, { headers });
-    for (const u of users) {
-      await fetch(`${url}/rpush/users/${encodeURIComponent(JSON.stringify(u))}`, { headers });
-    }
-  };
+      <button onClick={refresh} disabled={loading} style={{ width: '100%', marginTop: 12, padding: '12px', border: 'none', borderRadius: 10, background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+        {loading ? '⏳ Updating...' : '🔄 Get Current Price'}
+      </button>
 
-  let { raw, users } = await readUsers();
+      {status ? <div style={{ marginTop: 10, fontSize: 13, color: status.startsWith('❌') ? '#b91c1c' : '#166534' }}>{status}</div> : null}
 
-  // Restore: /api/debug?restore=email@gmail.com
-  if (req.query.restore) {
-    const email = String(req.query.restore).toLowerCase().trim();
-    users = users.map((u) => u.email?.toLowerCase().trim() === email ? { ...u, deletedFromAdmin: false } : u);
-    await saveUsers(users);
-    return res.status(200).json({ ok: true, message: `Restored ${email}` });
-  }
+      {notes ? <div style={{ marginTop: 10, background: '#fef9c3', padding: '8px 10px', borderRadius: 8, fontSize: 13 }}>💡 {notes}</div> : null}
 
-  // Hide: /api/debug?hide=email@gmail.com
-  if (req.query.hide) {
-    const email = String(req.query.hide).toLowerCase().trim();
-    users = users.map((u) => u.email?.toLowerCase().trim() === email ? { ...u, deletedFromAdmin: true } : u);
-    await saveUsers(users);
-    return res.status(200).json({ ok: true, message: `Hidden ${email}` });
-  }
-
-  // Your original debug output - kept
-  const emails = users.map((u) => u.email);
-  const totalRegisteredInUpstash = users.length;
-  const hiddenUsers = users.filter((u) => u.deletedFromAdmin);
-  const visibleUsers = users.filter((u) => !u.deletedFromAdmin);
-
-  // Never send passwords to frontend
-  const safe = (list) => list.map((u) => {
-    const { password, securityAnswerHash, ...rest } = u;
-    return rest;
-  });
-
-  return res.status(200).json({
-    ok: true,
-    countItems: raw.length,
-    emails,
-    rawLength: raw[0]?.length || 0,
-    // New admin fields
-    totalRegisteredInUpstash,
-    hiddenUsersCount: hiddenUsers.length,
-    visibleCount: visibleUsers.length,
-    users: safe(visibleUsers),
-    hiddenUsers: safe(hiddenUsers),
-  });
+      <div style={{ marginTop: 12 }}>
+        {items.map((it) => (
+          <div key={it.id || it.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+            <span>{it.emoji} {it.name} <span style={{ color: '#999', fontSize: 12 }}>({it.unit})</span></span>
+            <b>₦{(it.price ?? 0).toLocaleString()}</b>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 11, color: '#999', marginTop: 10 }}>Only you see this. Test here before it goes live.</p>
+    </div>
+  );
 }
