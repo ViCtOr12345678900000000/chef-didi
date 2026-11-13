@@ -220,12 +220,18 @@ export default function CalorieCalculator({ user, goal, themeId, lang, customCal
             <button onClick={() => setShowWeek(!showWeek)} className={`h-10 px-4 rounded-full text-[12px] font-semibold shrink-0 ${showWeek ? "bg-[#1A1A2E] text-white" : "bg-white border border-stone-200"}`}>{showWeek ? "Hide Week" : "This Week"}</button>
           </div>
           {showWeek && (
-            <div className="bg-[#FAF9F6] border border-stone-100 rounded-2xl p-3 mb-3">
-              <p className="text-[12px] font-semibold mb-2">This week — kcal per day</p>
-              <div className="flex items-end gap-2 h-[80px]">
-                {weekly.map(w => (<div key={w.date} className="flex-1 flex flex-col items-center gap-1"><span className="text-[9px] font-bold">{w.total > 0 ? w.total : ""}</span><div className={`w-full rounded-t-md ${w.date === dateStr(0) ? `bg-gradient-to-t ${theme.btn}` : "bg-stone-300"}`} style={{ height: `${Math.max(6, (w.total / maxWeek) * 60)}px` }} /><span className="text-[9px] text-stone-400">{w.day}</span></div>))}
+            <div className="bg-[#FAF9F6] border border-stone-100 rounded-2xl p-4 mb-3">
+              <p className="text-[12px] font-semibold mb-3">This week — kcal per day</p>
+              <div className="flex items-end gap-2 h-[160px] pt-1">
+                {weekly.map(w => (
+                  <div key={w.date} className="flex-1 flex flex-col items-center gap-1.5 justify-end h-full">
+                    <span className="text-[10px] font-bold leading-none">{w.total > 0 ? w.total : ""}</span>
+                    <div className={`w-full rounded-t-lg ${w.date === dateStr(0) ? `bg-gradient-to-t ${theme.btn}` : "bg-stone-300"}`} style={{ height: `${Math.max(8, (w.total / maxWeek) * 128)}px` }} />
+                    <span className="text-[10px] text-stone-400">{w.day}</span>
+                  </div>
+                ))}
               </div>
-              <p className="text-[11px] text-stone-400 mt-2 font-light">Total this week: {weekly.reduce((s, w) => s + w.total, 0)} kcal • Avg: {Math.round(weekly.reduce((s, w) => s + w.total, 0) / 7)} / day</p>
+              <p className="text-[11px] text-stone-400 mt-3 font-light">Total this week: {weekly.reduce((s, w) => s + w.total, 0)} kcal • Avg: {Math.round(weekly.reduce((s, w) => s + w.total, 0) / 7)} / day</p>
             </div>
           )}
           <div className="flex gap-2 mb-2">
