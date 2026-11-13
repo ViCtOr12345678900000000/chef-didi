@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { marketLocationFor } from "../lib/didi";
+import { marketLocationFor } from "../lib/didi"; 
 
 const UNIT_RATES_NGN = [
   { keywords: ["puna yam", "yam"], unitPrice: 2500, defaultQty: 0.3, unitType: "tuber" },
