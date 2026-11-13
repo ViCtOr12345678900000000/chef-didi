@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 
+
 // Fallback if Gemini hasn't run yet - real prices from 10 Nov 2026
 const FALLBACK_PRICES = {
   updated: "10 Nov 2026",
