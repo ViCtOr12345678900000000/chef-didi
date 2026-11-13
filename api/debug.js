@@ -12,25 +12,31 @@ Return ONLY valid JSON:
   "updated": "13 Nov 2026",
   "source": "FoodPrices.ng + Mile 12 via Ola of North",
   "market": "Mile 12",
-    "items": [
-    { "id": "tomato", "name": "Tomato", "unit": "1kg", "price": null, "emoji": "🍅" },
-    { "id": "rodo", "name": "Rodo Pepper", "unit": "1kg", "price": null, "emoji": "🌶️" },
-    { "id": "tatashe", "name": "Tatashe", "unit": "1kg", "price": null, "emoji": "🫑" },
-    { "id": "shombo", "name": "Shombo", "unit": "1kg", "price": null, "emoji": "🌶️" },
-    { "id": "onion", "name": "Onion", "unit": "1kg", "price": null, "emoji": "🧅" },
-    { "id": "rice_foreign", "name": "Foreign Rice", "unit": "1 derica", "price": null, "emoji": "🍚" },
-    { "id": "rice_local", "name": "Local Rice", "unit": "1 derica", "price": null, "emoji": "🍚" },
-    { "id": "garri_ijebu", "name": "Garri Ijebu", "unit": "1 paint", "price": null, "emoji": "🥣" },
-    { "id": "yam", "name": "Yam (medium)", "unit": "1 tuber", "price": null, "emoji": "🍠" },
-    { "id": "crayfish", "name": "Crayfish", "unit": "small plate", "price": null, "emoji": "🦐" },
-    { "id": "seasoning", "name": "Seasoning (2 cubes)", "unit": "pack", "price": null, "emoji": "🧂" },
-    { "id": "palm_oil", "name": "Palm Oil", "unit": "1 bottle 75cl", "price": null, "emoji": "🫙" }
+  "items": [
+    { "id": "tomato", "name": "Tomato", "unit": "1kg", "price": null, "emoji": "🍅", "sourceUrl": null },
+    { "id": "rodo", "name": "Rodo Pepper", "unit": "1kg", "price": null, "emoji": "🌶️", "sourceUrl": null },
+    { "id": "tatashe", "name": "Tatashe", "unit": "1kg", "price": null, "emoji": "🫑", "sourceUrl": null },
+    { "id": "shombo", "name": "Shombo", "unit": "1kg", "price": null, "emoji": "🌶️", "sourceUrl": null },
+    { "id": "onion", "name": "Onion", "unit": "1kg", "price": null, "emoji": "🧅", "sourceUrl": null },
+    { "id": "rice_foreign", "name": "Foreign Rice", "unit": "1 derica", "price": null, "emoji": "🍚", "sourceUrl": null },
+    { "id": "rice_local", "name": "Local Rice", "unit": "1 derica", "price": null, "emoji": "🍚", "sourceUrl": null },
+    { "id": "garri_ijebu", "name": "Garri Ijebu", "unit": "1 paint", "price": null, "emoji": "🥣", "sourceUrl": null },
+    { "id": "yam", "name": "Yam (medium)", "unit": "1 tuber", "price": null, "emoji": "🍠", "sourceUrl": null },
+    { "id": "crayfish", "name": "Crayfish", "unit": "small plate", "price": null, "emoji": "🦐", "sourceUrl": null },
+    { "id": "seasoning", "name": "Seasoning (2 cubes)", "unit": "pack", "price": null, "emoji": "🧂", "sourceUrl": null },
+    { "id": "palm_oil", "name": "Palm Oil", "unit": "1 bottle 75cl", "price": null, "emoji": "🫙", "sourceUrl": null }
   ],
   "notes": null,
   "confidence": "high"
 }
 Notes rule: DO NOT copy "Onion expensive this week". Write a NEW 1-sentence note based on the REAL prices you just found - e.g. which item rose most, which fell, or if nothing changed say "Prices stable this week". If you don't have enough data, leave notes as null.
-Rules: The prices above are NULL on purpose - they are NOT real prices, DO NOT copy them. You MUST fill each price from a real source from the last 14 days. If you cannot find a real price, leave it as null. DO NOT INVENT. DO NOT guess. DO NOT reuse old prices.
+Rules:
+- The prices above are NULL on purpose - they are NOT real prices, DO NOT copy them.
+- You MUST use Google Search. Do NOT answer from memory.
+- For EACH item, you must find a real page from the last 14 days and put its URL in sourceUrl.
+- If you cannot find a real page for an item, set price to null and sourceUrl to null. DO NOT INVENT. DO NOT guess. DO NOT reuse old prices.
+- If the same item appears on 2 sources with different prices, use the FoodPrices.ng price and say so in notes.
+- Retail / per-kg prices only, Naira, integer only.
 `;
 
   const models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
@@ -42,7 +48,8 @@ Rules: The prices above are NULL on purpose - they are NOT real prices, DO NOT c
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+          tools: [{ googleSearch: {} }],
+          generationConfig: { temperature: 0, responseMimeType: "application/json" }
         })
       });
       const data = await r.json();
