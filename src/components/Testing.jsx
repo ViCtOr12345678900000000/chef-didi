@@ -45,25 +45,29 @@ export default function Testing() {
 
   // FIXED: now calls /api/debug, not /api/prices-refresh
   const getCurrentPrice = async () => {
-    setLoading(true);
-    setStatus('🔍 Gemini is checking FoodPrices.ng + Mile 12...');
+  setLoading(true);
+  setStatus('🔍 Trying...');
+  try {
+    const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
+    const text = await res.text(); // <-- read as TEXT first, not json
+    console.log('RAW:', text.slice(0, 500));
     try {
-      const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
-      
+      const json = JSON.parse(text);
+      if (!res.ok) throw new Error(json.error || `Server ${res.status}`);
       const data = json.data || json;
-      if (!data || !Array.isArray(data.items) || data.items.length === 0) {
-        throw new Error('No items returned');
-      }
+      if (!data || !Array.isArray(data.items)) throw new Error('No items: ' + text.slice(0, 200));
       setPrices(data);
       try { localStorage.setItem('didi_live_prices', JSON.stringify(data)); } catch {}
-      setStatus(`✅ Updated! ${data.updated} • Source: ${data.source} • Confidence: ${data.confidence || 'high'}`);
+      setStatus(`✅ Updated! ${data.updated} • ${data.source}`);
     } catch (e) {
-      setStatus(`❌ Could not fetch: ${e.message}. Showing last saved prices.`);
+      // Show the REAL server response, not Safari's generic error
+      setStatus(`❌ Server said (${res.status}): ${text.slice(0, 300)}`);
     }
-    setLoading(false);
-  };
+  } catch (e) {
+    setStatus(`❌ Fetch failed: ${e.message}`);
+  }
+  setLoading(false);
+};
 
   // Safe getter - never crashes if item is missing
   const getItemPrice = (id) => {
