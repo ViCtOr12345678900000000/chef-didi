@@ -3,7 +3,7 @@ import { Heart, Share2, ShoppingCart, ChefHat, Timer, RefreshCw, Flame, X, Check
 import { GOALS, THEMES, isFavourite, toggleFavourite, addToShopping, getSwaps } from "../lib/didi";
 import { getDiasporaSwap } from "../lib/translator";
 import CostEstimator from "./CostEstimator";
-import DiasporaTranslator from "./DiasporaTranslator";
+import DiasporaTranslator from "./DiasporaTranslator"; 
 
 export default function AIResponse({ recipe, onGenerateAnother, onClear, goal, sittings, lang = 'en', themeId = 'purple', onAddToKcal, user, location = "nigeria" }) {
   const [fav, setFav] = useState(false);
