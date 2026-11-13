@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Home, ChefHat, Briefcase, Sparkles } from 'lucide-react';
 import WorkWithUs from './WorkWithUs';
 import AdSlot from './AdSlot';
-
+ 
 export default function Sidebar({ theme, open, onClose, user }) {
   const [tab, setTab] = useState('home');
   if (!open) return null;
