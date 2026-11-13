@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'; 
 
 const FALLBACK_PRICES = {
   updated: "10 Nov 2026",
