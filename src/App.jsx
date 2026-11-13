@@ -35,7 +35,7 @@ function CalculatorTab({ user, themeId, lang, onRequireAuth, goal }) {
   );
 }
 
-// --- KITCHEN: Leftover + Pantry + 3-Day Plan + Favs + Reviews ---
+// --- KITCHEN: Leftover + Pantry + 3-Day Plan + Favs + Review (from Footer) ---
 function KitchenTab({ user, themeId, lang, onRequireAuth, onPickRecipe, goal, sittings, cuisine, location }) {
   const isGuest = !user?.email;
   const [leftoverInput, setLeftoverInput] = useState('');
@@ -49,10 +49,30 @@ function KitchenTab({ user, themeId, lang, onRequireAuth, onPickRecipe, goal, si
   const [showFav, setShowFav] = useState(false);
   const [showHist, setShowHist] = useState(false);
   const [showShop, setShowShop] = useState(false);
-  const [name, setName] = useState(user?.name || '');
-  const [text, setText] = useState('');
-  const [stars, setStars] = useState(5);
-  const [reviews, setReviews] = useState(() => { try { return JSON.parse(localStorage.getItem('didi_reviews') || '[]'); } catch { return []; } });
+
+  // REVIEW - moved from Footer.jsx, Upstash only, no localStorage
+  const [name, setName] = useState(user?.name || "");
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleReview = async () => {
+    const finalName = (name || user?.name || "").trim();
+    if (!finalName || !comment.trim()) { setMsg("Please add your name + comment"); return; }
+    setSending(true); setMsg("");
+    try {
+      const res = await fetch("/api/my-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: finalName, email: user?.email || "guest", rating, comment: comment.trim() }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Failed");
+      setMsg("✅ Thanks! Your review was sent to Didi.");
+      setComment(""); setRating(5);
+    } catch (e) { setMsg("❌ " + e.message); } finally { setSending(false); }
+  };
 
   useEffect(() => {
     const sync = () => { setFavList(getFavourites(user)); setHistList(getHistory(user)); setShopList(getShopping(user)); setPantry(getPantry(user)); };
@@ -73,22 +93,18 @@ function KitchenTab({ user, themeId, lang, onRequireAuth, onPickRecipe, goal, si
       setLeftoverRecipe(data.recipe);
     } catch(e) { alert(e.message); } finally { setIsLoading(false); }
   };
+
   const addPantryItem = () => {
     if (isGuest) { onRequireAuth?.(); return; }
     if (!pantryInput.trim()) return;
     const n = [...pantry, pantryInput.trim()]; setPantry(n); savePantry(user, n); setPantryInput('');
-  };
-  const submitReview = () => {
-    if (!text.trim()) return;
-    if (!user?.email) { onRequireAuth?.(); return; }
-    const r = { id: Date.now(), name: name || user.name || 'Didi User', text: text.trim(), stars, date: new Date().toLocaleDateString() };
-    const next = [r, ...reviews].slice(0, 50); setReviews(next); localStorage.setItem('didi_reviews', JSON.stringify(next)); setText('');
   };
 
   return (
     <div className="px-4 max-w-[600px] mx-auto space-y-4">
       <h2 className="text-xl font-bold text-[#1A1A2E]">🍳 My Kitchen</h2>
       <p className="text-stone-500 text-sm -mt-2">Leftovers, pantry, meal plan, favourites & reviews.</p>
+
       <div className="bg-white border rounded-2xl p-4 shadow-sm">
         <h3 className="font-bold">♻️ Leftover Rescue</h3>
         <p className="text-xs text-stone-400">Got leftover jollof? Don’t throw it. Didi remixes it.</p>
@@ -99,13 +115,16 @@ function KitchenTab({ user, themeId, lang, onRequireAuth, onPickRecipe, goal, si
         <div className="flex flex-wrap gap-1.5 mt-2">{['leftover jollof, 2 eggs','leftover rice, chicken','leftover beans, plantain'].map(s => (<button key={s} onClick={() => setLeftoverInput(s)} className="text-[11px] font-semibold px-3 py-1.5 rounded-full border bg-stone-50">{s}</button>))}</div>
         {leftoverRecipe && <button onClick={() => onPickRecipe(leftoverRecipe)} className="w-full mt-3 text-left border rounded-xl p-3"><span className="block font-bold text-sm">{leftoverRecipe.title}</span><span className="text-xs text-stone-400">{leftoverRecipe.time} • Tap to open in Cook →</span></button>}
       </div>
+
       <div className="bg-white border rounded-2xl p-4 shadow-sm">
         <h3 className="font-bold">🥫 My Pantry</h3>
         <p className="text-xs text-stone-400">Always at home — tap to use in Cook.</p>
         <div className="flex flex-wrap gap-1.5 mt-3">{pantry.length === 0 ? <p className="text-xs text-stone-400">No pantry items yet.</p> : pantry.map(p => (<span key={p} className="text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">{p}</span>))}</div>
         <div className="flex gap-1.5 mt-2"><input value={pantryInput} onChange={e => setPantryInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPantryItem()} placeholder={isGuest ? "Login to add 🔒" : "Add e.g. Maggi"} className="flex-1 h-10 px-3 bg-stone-50 border rounded-full text-xs outline-none" /><button onClick={addPantryItem} className="h-10 px-4 bg-green-600 text-white rounded-full text-xs font-bold">Add</button></div>
       </div>
+
       <WeeklyPlan user={user} goal={goal} sittings={sittings} customCalories={null} cuisine={cuisine} location={location} lang={lang} themeId={themeId} onPickRecipe={(r) => onPickRecipe(r)} />
+
       <div className="bg-white border rounded-2xl p-4 shadow-sm flex flex-wrap gap-2">
         <button onClick={() => { if (isGuest) return onRequireAuth?.(); setShowFav(!showFav); setShowHist(false); setShowShop(false); }} className="h-10 px-4 rounded-full text-xs font-bold bg-stone-100">❤️ Favourites {isGuest ? "🔒" : `(${favList.length})`}</button>
         <button onClick={() => { if (isGuest) return onRequireAuth?.(); setShowHist(!showHist); setShowFav(false); setShowShop(false); }} className="h-10 px-4 rounded-full text-xs font-bold bg-stone-100">🕒 History {isGuest ? "🔒" : `(${histList.length})`}</button>
@@ -122,14 +141,21 @@ function KitchenTab({ user, themeId, lang, onRequireAuth, onPickRecipe, goal, si
           {shopList.length > 0 && <button onClick={() => setShopList(clearShopping(user, true))} className="mt-2 text-xs font-bold text-red-500">Clear ticked</button>}
         </div>
       )}
-      <div className="bg-white border rounded-2xl p-4 shadow-sm space-y-3">
-        <h3 className="font-bold">⭐ Reviews</h3>
-        <div className="flex gap-1">{[1,2,3,4,5].map(s => (<button key={s} onClick={() => setStars(s)} className="text-2xl">{s <= stars ? '⭐' : '☆'}</button>))}</div>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="w-full h-11 px-3 bg-stone-50 border rounded-xl text-sm outline-none" />
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. I had rice and chicken, Didi made fried rice. No waste!" className="w-full px-3 py-2 bg-stone-50 border rounded-xl text-sm outline-none min-h-[80px]" />
-        <button onClick={submitReview} className="w-full bg-purple-600 text-white font-bold py-3 rounded-xl text-sm">Post Review</button>
+
+      {/* REVIEW - moved from Footer.jsx */}
+      <div className="bg-white border rounded-2xl p-4 shadow-sm">
+        <p className="text-[28px] mb-1">⭐</p>
+        <h3 className="font-bold text-lg">Love Chef Didi? Leave a Review</h3>
+        <p className="text-[13px] text-stone-500 mt-1">Your comment goes straight to Didi's dashboard.</p>
+        <div className="flex gap-1 mt-3">
+          {[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setRating(n)} className="text-[26px] leading-none">{n <= rating ? "⭐" : "☆"}</button>))}
+          <span className="text-[12px] font-bold text-stone-500 self-center ml-1">{rating}/5</span>
+        </div>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="off" maxLength={50} className="w-full h-11 px-4 bg-stone-50 border rounded-full text-[13px] outline-none mt-3" />
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Leave a review or modification you'd like to see in later versions" rows={3} maxLength={500} className="w-full px-4 py-3 bg-stone-50 border rounded-2xl text-[13px] outline-none mt-2 resize-none" />
+        <button type="button" onClick={handleReview} disabled={sending} className="w-full h-11 mt-3 rounded-full text-[13px] font-bold text-white bg-purple-600 disabled:opacity-50">{sending ? "Sending..." : "Send Review →"}</button>
+        {msg && <p className="text-[12px] font-semibold mt-2">{msg}</p>}
       </div>
-      {reviews.map(r => (<div key={r.id} className="bg-white border rounded-2xl p-4 shadow-sm"><p className="font-bold text-sm">{r.name} <span className="font-normal text-stone-400 text-xs">• {r.date}</span></p><p className="text-sm">{'⭐'.repeat(r.stars)}</p><p className="text-sm text-stone-600 mt-1">{r.text}</p></div>))}
     </div>
   );
 }
@@ -143,7 +169,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [kitchenRecipe, setKitchenRecipe] = useState(null);
 
-  // SettingsBar state — now lives in App.jsx, not IngredientPicker
+  // SettingsBar state — lives in App.jsx, not IngredientPicker
   const [goal, setGoal] = useState('normal');
   const [sittings, setSittings] = useState(3);
   const [customCalories, setCustomCalories] = useState(null);
@@ -173,6 +199,7 @@ export default function App() {
       return true;
     } catch { return false; }
   };
+
   const doMigrate = async () => {
     try { const s = getSession(); if (!s?.email) return; if (localStorage.getItem("didi-migrated")) return; const email = s.email.toLowerCase().trim(); const users = JSON.parse(localStorage.getItem("didi_users") || "[]"); const found = users.find((u) => u.email === email); await fetch("/api/migrate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ users: [{ email, name: s.name || found?.name || "", password: found?.password || "", createdAt: new Date().toISOString(), migrated: true }] }) }); localStorage.setItem("didi-migrated", "1"); } catch {}
   };
@@ -197,12 +224,14 @@ export default function App() {
     await restoreFromCloud(u.email); const p = getPrefs(u.email); if (p.theme) setThemeId(p.theme); if (p.lang) setLang(p.lang);
     window.dispatchEvent(new Event("didi-data-restored"));
   };
+
   const handleLogout = useCallback(() => {
     const currentTheme = themeId; const currentLang = lang;
     logoutUser(); setUser(null); setThemeId(currentTheme); setLang(currentLang);
     localStorage.setItem("didi_prefs_guest", JSON.stringify({ theme: currentTheme, lang: currentLang }));
     localStorage.removeItem("didi_lastActive");
   }, [themeId, lang]);
+
   const timerRef = useRef(null);
   useEffect(() => {
     if (!user) return;
@@ -258,7 +287,6 @@ export default function App() {
       {activeTab === 'cook' && (
         <div>
           <button onClick={() => setActiveTab('home')} className="mx-4 mb-3 text-[13px] font-bold text-stone-500">← Back to Home</button>
-          {/* SettingsBar lives in App.jsx now — same pattern as Calculator / Kitchen */}
           <div className="px-4 md:px-6 max-w-[1400px] mx-auto mb-4">
             <SettingsBar goal={goal} setGoal={setGoal} sittings={sittings} setSittings={setSittings} themeId={themeId} setThemeId={handleThemeChange} lang={lang} setLang={handleLangChange} user={user} customCalories={customCalories} setCustomCalories={handleCustomCalories} />
           </div>
