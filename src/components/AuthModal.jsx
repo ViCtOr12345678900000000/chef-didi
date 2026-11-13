@@ -199,51 +199,51 @@ export default function AuthModal({ onClose, onAuth }) {
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   };
 
-  const inputCls = "w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]";
-  const selectCls = "w-full h-12 px-4 bg-[#FBFAFF] border border-[#EDEAFF] rounded-full text-[14px] outline-none focus:border-[#7B61FF]";
-  const btnCls = "w-full h-12 bg-gradient-to-r from-[#4A2C8A] to-[#7B61FF] text-white rounded-full font-bold text-[14px] shadow disabled:opacity-60";
+  const inputCls = "w-full h-12 px-4 bg-[#FAF9F6] border border-stone-200 rounded-2xl text-[14px] outline-none focus:border-[#1A1A2E] focus:bg-white transition placeholder:text-stone-400";
+  const selectCls = "w-full h-12 px-4 bg-[#FAF9F6] border border-stone-200 rounded-2xl text-[14px] outline-none focus:border-[#1A1A2E] focus:bg-white transition";
+  const btnCls = "w-full h-12 bg-[#1A1A2E] hover:bg-black text-white rounded-full font-semibold text-[14px] shadow disabled:opacity-60 active:scale-[0.98] transition";
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-[28px] p-6 w-full max-w-[400px] shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-[28px] p-6 w-full max-w-[400px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-stone-100 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {mode === "auth" && (
           <>
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-[24px] font-bold text-[#1A1A2E]">{isLogin ? "Welcome back 👋" : "Join Chef Didi 👩🏾‍🍳"}</h2>
-                <p className="text-[13px] text-stone-400 mt-1">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to unlock Favourites, Shopping, Kcal & more"}</p>
+                <h2 className="font-display font-medium text-[24px] leading-tight text-[#1A1A2E] tracking-tight">{isLogin ? "Welcome back 👋" : "Join Chef Didi 👩🏾‍🍳"}</h2>
+                <p className="text-[13px] text-stone-400 mt-1 font-light">{isLogin ? "Login to save your Goal, Theme & Kcal" : "Create account to unlock Favourites, Shopping, Kcal & more"}</p>
               </div>
-              <button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button>
+              <button onClick={onClose} className="w-8 h-8 bg-[#FAF9F6] border border-stone-100 rounded-full font-semibold text-stone-500 flex items-center justify-center shrink-0">✕</button>
             </div>
             <form onSubmit={handleSubmit} className="mt-5 space-y-3">
               {!isLogin && <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name e.g. Ada" className={inputCls} />}
               <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="Email e.g. ada@gmail.com" className={inputCls} />
               <input value={password} onChange={e => setPassword(e.target.value)} type="password" required placeholder="Password" className={inputCls} />
               {!isLogin && (
-                <div className="bg-[#FBFAFF] border border-[#EDEAFF] rounded-2xl p-3 space-y-2">
-                  <p className="text-[12px] font-bold text-[#4A2C8A]">🔐 Security question — for password recovery</p>
+                <div className="bg-[#FAF9F6] border border-stone-100 rounded-2xl p-3 space-y-2">
+                  <p className="text-[12px] font-semibold text-[#1A1A2E]">🔐 Security question — for password recovery</p>
                   <select value={secQ} onChange={e => setSecQ(e.target.value)} className={selectCls}>{QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}</select>
                   <input value={secA} onChange={e => setSecA(e.target.value)} placeholder="Your answer e.g. Bingo" className={inputCls} />
-                  <p className="text-[11px] text-stone-400">Remember this answer. We will ask it if you forget your password.</p>
+                  <p className="text-[11px] text-stone-400 font-light">Remember this answer. We will ask it if you forget your password.</p>
                 </div>
               )}
-              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-3">{err}</p>}
               <button type="submit" disabled={loading} className={btnCls}>{loading ? "Please wait..." : isLogin ? "Login →" : "Create Account →"}</button>
             </form>
-            {isLogin && <button onClick={() => { setMode("forgot-email"); setErr(""); }} className="w-full text-center text-[12px] font-bold text-stone-500 mt-3">Forgot password? Reset with security question →</button>}
-            <button onClick={() => { setIsLogin(!isLogin); setErr(""); }} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">{isLogin ? "No account? Create one →" : "Already have account? Login →"}</button>
-            {!isLogin && <p className="text-[11px] text-center text-stone-400 mt-3">🔒 Register once, unlock Favourites, Shopping, Pantry, Weight, Water & Kcal History</p>}
+            {isLogin && <button onClick={() => { setMode("forgot-email"); setErr(""); }} className="w-full text-center text-[12px] font-semibold text-stone-500 mt-3 hover:text-[#1A1A2E]">Forgot password? Reset with security question →</button>}
+            <button onClick={() => { setIsLogin(!isLogin); setErr(""); }} className="w-full text-center text-[12px] font-semibold text-[#1A1A2E] mt-3">{isLogin ? "No account? Create one →" : "Already have account? Login →"}</button>
+            {!isLogin && <p className="text-[11px] text-center text-stone-400 mt-3 font-light">🔒 Register once, unlock Favourites, Shopping, Pantry, Weight, Water & Kcal History</p>}
           </>
         )}
 
         {mode === "setup-sec" && (
           <>
-            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">One last step 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
-            <p className="text-[13px] text-stone-500 mt-1">Set a security question so you can recover your password if you forget it. You only do this once.</p>
+            <div className="flex justify-between items-start"><h2 className="font-display font-medium text-[22px] tracking-tight">One last step 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-[#FAF9F6] border border-stone-100 rounded-full font-semibold text-stone-500 flex items-center justify-center shrink-0">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1 font-light">Set a security question so you can recover your password if you forget it. You only do this once.</p>
             <form onSubmit={handleSetupSec} className="mt-4 space-y-3">
               <select value={setupQ} onChange={e => setSetupQ(e.target.value)} className={selectCls}>{QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}</select>
               <input value={setupA} onChange={e => setSetupA(e.target.value)} placeholder="Your answer" className={inputCls} />
-              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-3">{err}</p>}
               <button type="submit" disabled={loading} className={btnCls}>{loading ? "Saving..." : "Save & Continue →"}</button>
             </form>
           </>
@@ -251,37 +251,37 @@ export default function AuthModal({ onClose, onAuth }) {
 
         {mode === "forgot-email" && (
           <>
-            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Forgot password? 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
-            <p className="text-[13px] text-stone-500 mt-1">Enter your email. We will show your security question.</p>
+            <div className="flex justify-between items-start"><h2 className="font-display font-medium text-[22px] tracking-tight">Forgot password? 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-[#FAF9F6] border border-stone-100 rounded-full font-semibold text-stone-500 flex items-center justify-center shrink-0">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1 font-light">Enter your email. We will show your security question.</p>
             <form onSubmit={handleForgotEmail} className="mt-4 space-y-3">
               <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="Email e.g. ada@gmail.com" className={inputCls} />
-              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-3">{err}</p>}
               <button type="submit" disabled={loading} className={btnCls}>{loading ? "Checking..." : "Show my question →"}</button>
             </form>
-            <button onClick={resetAll} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">← Back to login</button>
+            <button onClick={resetAll} className="w-full text-center text-[12px] font-semibold text-[#1A1A2E] mt-3">← Back to login</button>
           </>
         )}
 
         {mode === "forgot-answer" && (
           <>
-            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Security question 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
-            <p className="text-[13px] font-bold text-[#4A2C8A] mt-3 bg-[#FBFAFF] border border-[#EDEAFF] rounded-2xl p-3">{forgotQ}</p>
+            <div className="flex justify-between items-start"><h2 className="font-display font-medium text-[22px] tracking-tight">Security question 🔐</h2><button onClick={onClose} className="w-8 h-8 bg-[#FAF9F6] border border-stone-100 rounded-full font-semibold text-stone-500 flex items-center justify-center shrink-0">✕</button></div>
+            <p className="text-[13px] font-semibold text-[#1A1A2E] mt-3 bg-[#FAF9F6] border border-stone-100 rounded-2xl p-3">{forgotQ}</p>
             <form onSubmit={handleForgotAnswer} className="mt-3 space-y-3">
               <input value={forgotA} onChange={e => setForgotA(e.target.value)} placeholder="Your answer" className={inputCls} />
-              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-3">{err}</p>}
               <button type="submit" disabled={loading} className={btnCls}>{loading ? "Checking..." : "Verify answer →"}</button>
             </form>
-            <button onClick={resetAll} className="w-full text-center text-[12px] font-bold text-[#7B61FF] mt-3">← Back to login</button>
+            <button onClick={resetAll} className="w-full text-center text-[12px] font-semibold text-[#1A1A2E] mt-3">← Back to login</button>
           </>
         )}
 
         {mode === "forgot-new" && (
           <>
-            <div className="flex justify-between items-start"><h2 className="text-[22px] font-bold">Set new password ✅</h2><button onClick={onClose} className="w-8 h-8 bg-stone-100 rounded-full font-bold">✕</button></div>
-            <p className="text-[13px] text-stone-500 mt-1">Answer correct. Choose a new password.</p>
+            <div className="flex justify-between items-start"><h2 className="font-display font-medium text-[22px] tracking-tight">Set new password ✅</h2><button onClick={onClose} className="w-8 h-8 bg-[#FAF9F6] border border-stone-100 rounded-full font-semibold text-stone-500 flex items-center justify-center shrink-0">✕</button></div>
+            <p className="text-[13px] text-stone-500 mt-1 font-light">Answer correct. Choose a new password.</p>
             <form onSubmit={handleForgotNew} className="mt-4 space-y-3">
               <input value={newPass} onChange={e => setNewPass(e.target.value)} type="password" required placeholder="New password (min 4 chars)" className={inputCls} />
-              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 rounded-xl p-3">{err}</p>}
+              {err && <p className="text-[12px] text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-3">{err}</p>}
               <button type="submit" disabled={loading} className={btnCls}>{loading ? "Saving..." : "Save new password & Login →"}</button>
             </form>
           </>
