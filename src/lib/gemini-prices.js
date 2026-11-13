@@ -1,7 +1,7 @@
-// lib/gemini-prices.js
+// lib/gemini-prices.js - v2 with fallback + real error messages
 export async function getLivePrices() {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY;
-  if (!apiKey) throw new Error('No GEMINI_KEY');
+  if (!apiKey) throw new Error('No GEMINI_KEY in Vercel');
 
   const prompt = `
 You are a Lagos market price researcher for Chef Didi.
@@ -32,16 +32,38 @@ Return ONLY valid JSON:
 Rules: If no price from last 14 days, set price to null. DO NOT INVENT. Retail / per-kg prices only.
 `;
 
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
-    })
-  });
-  const data = await r.json();
-  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  text = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  // Try models in order - first one that works wins
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+  let lastError = '';
+
+  for (const model of models) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        lastError = data?.error?.message || `Google ${r.status} for ${model}`;
+        continue; // try next model
+      }
+      let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!text) {
+        lastError = `Empty response from ${model}`;
+        continue;
+      }
+      text = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(text);
+      if (!parsed.items) throw new Error('No items in Gemini response');
+      return parsed;
+    } catch (e) {
+      lastError = e.message;
+      continue;
+    }
+  }
+  throw new Error(`Gemini failed: ${lastError}`);
 }
