@@ -68,7 +68,6 @@ Rules:
       if (!parsed.items) throw new Error('No items');
       return parsed;
     } catch (e) {
-      // Preserve quota error so handler can return 429
       if (e.message && e.message.toLowerCase().includes('quota')) {
         lastStatus = 429;
       }
@@ -83,13 +82,38 @@ Rules:
 }
 
 export default async function handler(req, res) {
-  // ===== Get Current Price =====
+  // ===== Get Current Price - WITH SERVER CACHE =====
   if (req.query.action === 'prices-refresh' && req.method === 'POST') {
     try {
+      // 1. Try cache first - Upstash Redis you already use for users
+      const cacheUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const cacheToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+      if (cacheUrl && cacheToken) {
+        const cachedRes = await fetch(`${cacheUrl}/get/didi_live_prices`, {
+          headers: { Authorization: `Bearer ${cacheToken}` }
+        });
+        const cachedJson = await cachedRes.json();
+        if (cachedJson.result) {
+          const cached = JSON.parse(cachedJson.result);
+          const ageHours = (Date.now() - cached.fetchedAt) / (1000 * 60 * 60);
+          if (ageHours < 12) {
+            // Fresh enough - return cached, DON'T call Gemini at all
+            return res.status(200).json({ success: true, data: cached.data, cached: true, ageHours: Math.round(ageHours * 10) / 10 });
+          }
+        }
+      }
+
+      // 2. Cache is old / empty - fetch ONCE from Gemini
       const data = await getLivePrices();
-      return res.status(200).json({ success: true, data });
+
+      // 3. Save it so next 1,000 users get the cached copy
+      if (cacheUrl && cacheToken) {
+        await fetch(`${cacheUrl}/set/didi_live_prices/${encodeURIComponent(JSON.stringify({ fetchedAt: Date.now(), data }))}`, {
+          headers: { Authorization: `Bearer ${cacheToken}` }
+        });
+      }
+      return res.status(200).json({ success: true, data, cached: false });
     } catch (e) {
-      // Return 429 so Testing.jsx shows friendly quota message, not 500 stack
       const status = e.status === 429 || String(e.message || '').toLowerCase().includes('quota') ? 429 : 500;
       return res.status(status).json({ error: e.message });
     }
