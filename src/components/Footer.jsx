@@ -1,5 +1,3 @@
-// components/Footer.jsx
-import { useState } from "react";
 import { THEMES, t } from "../lib/didi";
 
 const TIPS = [
@@ -18,47 +16,9 @@ const POPULAR = [
   "Egusi + Chicken",
 ];
 
-export default function Footer({ lang = "en", themeId = "purple", onPickPopular, user }) {
+export default function Footer({ lang = "en", themeId = "purple", onPickPopular }) {
   const theme = THEMES[themeId] || THEMES.purple;
   const tip = TIPS[new Date().getDate() % TIPS.length];
-
-  // --- REVIEW BOX STATE - Upstash only, no localStorage ---
-  const [name, setName] = useState(user?.name || "");
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [msg, setMsg] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const handleReview = async () => {
-    const finalName = (name || user?.name || "").trim();
-    if (!finalName || !comment.trim()) {
-      setMsg("Please add your name + comment");
-      return;
-    }
-    setSending(true);
-    setMsg("");
-    try {
-      const res = await fetch("/api/my-number", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: finalName,
-          email: user?.email || "guest",
-          rating,
-          comment: comment.trim(),
-        }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Failed");
-      setMsg("✅ Thanks! Your review was sent to Didi.");
-      setComment("");
-      setRating(5);
-    } catch (e) {
-      setMsg("❌ " + e.message);
-    } finally {
-      setSending(false);
-    }
-  };
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 md:px-6 pb-8 pt-2">
@@ -96,49 +56,6 @@ export default function Footer({ lang = "en", themeId = "purple", onPickPopular,
             ))}
           </div>
         </div>
-      </div>
-
-      {/* 4 - REVIEW BOX - Upstash -> shows in MyNumber */}
-      <div className="bg-white rounded-[28px] p-6 shadow-xl shadow-violet-900/10 mt-4">
-        <p className="text-[28px] mb-1">⭐</p>
-        <h3 className="font-display text-[20px] font-medium text-[#1A1A2E]">Love Chef Didi? Leave a Review</h3>
-        <p className="text-[13px] text-stone-500 mt-1">Your comment goes straight to Didi's dashboard.</p>
-
-        <div className="flex gap-1 mt-3">
-          {[1,2,3,4,5].map(n => (
-            <button key={n} type="button" onClick={() => setRating(n)} className="text-[26px] leading-none">
-              {n <= rating ? "⭐" : "☆"}
-            </button>
-          ))}
-          <span className="text-[12px] font-bold text-stone-500 self-center ml-1">{rating}/5</span>
-        </div>
-
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
-          autoComplete="off"
-          maxLength={50}
-          className="w-full h-11 px-4 bg-stone-50 border rounded-full text-[13px] outline-none mt-3"
-        />
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Leave a review or modification you'd like to see in later versions"
-          rows={3}
-          maxLength={500}
-          className="w-full px-4 py-3 bg-stone-50 border rounded-2xl text-[13px] outline-none mt-2 resize-none"
-        />
-        <button
-          type="button"
-          onClick={handleReview}
-          disabled={sending}
-          className={`w-full h-11 mt-3 rounded-full text-[13px] font-bold text-white bg-gradient-to-r ${theme.btn} disabled:opacity-50`}
-        >
-          {sending ? "Sending..." : "Send Review →"}
-        </button>
-        {msg && <p className="text-[12px] font-semibold mt-2">{msg}</p>}
       </div>
     </div>
   );
