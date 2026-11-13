@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { THEMES, GOALS } from "../lib/didi";
+import { THEMES, GOALS } from "../lib/didi"; 
 
 export default function SettingsBar({ goal, setGoal, sittings, setSittings, themeId, setThemeId, lang, setLang, customCalories, setCustomCalories, user }) {
   const [showCustom, setShowCustom] = useState(!!customCalories);
