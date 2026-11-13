@@ -2,8 +2,6 @@ import { Search, PlusCircleIcon, Delete, Clock, CookingPot, Sparkles, X, MoonSta
 import { useState, useEffect, useRef } from "react";
 import AIResponse from "./AIResponse";
 import Footer from "./Footer";
-// NO SettingsBar here anymore — it lives in App.jsx
-// NO CalorieCalculator / WeeklyPlan / WeightTrend / Reviews here anymore
 import { THEMES, GOALS, CUISINES, LOCATIONS, t, getPrefs, caloriesFor, addHistory, progressQuests } from "../lib/didi";
 
 export default function IngredientPicker({ user, themeId, lang, goal, setGoal, sittings, customCalories, cuisine, setCuisine, location, setLocation, onRequireAuth, initialRecipe, onClearInitial }) {
@@ -90,27 +88,18 @@ export default function IngredientPicker({ user, themeId, lang, goal, setGoal, s
   };
   const handleClearAll = () => { setRecipe(null); setIngPicker([]); setLastSurprise(null); try { localStorage.removeItem("didi_persisted_recipe"); localStorage.removeItem("didi_active_ingredients"); } catch {} };
 
-  // ... keep all your imports + logic exactly as you sent it ...
-
   return (
     <div className="w-full bg-[#FAF9F6] mx-auto max-w-[1400px] relative overflow-hidden">
-      {/* Header band — your theme gradient, but as a classy banner, not full page */}
       <div className={`relative mx-4 md:mx-6 rounded-[32px] overflow-hidden bg-gradient-to-br ${theme.page} px-5 md:px-8 pt-9 pb-8 text-center shadow-[0_16px_40px_rgba(0,0,0,0.12)]`}>
         <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[500px] h-[200px] bg-white/10 blur-[80px] rounded-full pointer-events-none" />
         <p className="relative text-[11px] font-bold tracking-[0.28em] uppercase text-white/60">Chef Didi • No Waste</p>
         <h1 className="relative font-display text-[34px] md:text-[48px] leading-[1.05] text-white mt-2">{t(lang, 'kitchen1')}<br /><span className="italic font-light text-white/90">{t(lang, 'kitchen2')}</span></h1>
         <p className="relative text-[14px] text-white/70 mt-3 max-w-[620px] mx-auto font-light">Add what you have — Rice, Chicken, Yam, Beans — and Didi makes a real recipe.</p>
         {isGuest && (<button onClick={() => onRequireAuth?.()} className="relative mt-5 inline-flex items-center gap-2 bg-white text-[#1A1A2E] text-[12px] font-semibold px-4 py-2.5 rounded-full shadow-md"><Lock size={13} /> Guest Mode • {Math.max(0, 2 - guestCount)} free recipes left — Login to unlock all</button>)}
-        <div className="relative flex justify-center gap-2 mt-5 flex-wrap">
-          <span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><CookingPot size={12} /> 120+ Recipes</span>
-          <span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><Clock size={12} /> Real Times</span>
-          <span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><Globe size={12} /> World + Nigerian</span>
-        </div>
+        <div className="relative flex justify-center gap-2 mt-5 flex-wrap"><span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><CookingPot size={12} /> 120+ Recipes</span><span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><Clock size={12} /> Real Times</span><span className="text-[12px] font-medium bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 flex items-center gap-1.5 backdrop-blur"><Globe size={12} /> World + Nigerian</span></div>
       </div>
 
-      {/* 1 - 2 - 3 */}
       <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-        {/* 1 */}
         <div className="bg-white rounded-[28px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-stone-100 h-full flex flex-col">
           <div className="flex items-center gap-2.5 mb-5"><span className={`w-9 h-9 rounded-full bg-gradient-to-br ${theme.btn} text-white flex items-center justify-center shadow-md text-[13px] font-bold`}>1</span><h2 className="font-display font-medium text-[21px] tracking-tight">{t(lang, 'add')}</h2><span className="ml-auto text-[10px] font-bold tracking-widest bg-[#FAF9F6] border border-stone-200 text-stone-500 px-2.5 py-1 rounded-full">FRESH</span></div>
           <div className="flex gap-2 mb-5"><input value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && addBtn()} placeholder="e.g. Chicken, Rice, Tomato..." className="flex-1 min-w-0 h-12 px-4 bg-[#FAF9F6] border border-stone-200 rounded-2xl text-[14px] outline-none focus:border-[#1A1A2E] focus:bg-white transition placeholder:text-stone-400" /><button onClick={addBtn} className={`shrink-0 h-12 w-12 flex items-center justify-center bg-gradient-to-br ${theme.btn} text-white rounded-2xl shadow-md`}><PlusCircleIcon size={20} /></button></div>
@@ -127,7 +116,6 @@ export default function IngredientPicker({ user, themeId, lang, goal, setGoal, s
           <div className="bg-[#FAF9F6] border border-stone-100 rounded-2xl p-3.5 flex gap-2 mt-4"><span>💡</span><p className="text-[12px] text-stone-600 leading-relaxed">Tip: Add <b>3-5 ingredients</b> • {CUISINES[cuisine]?.emoji} {CUISINES[cuisine]?.label} • {LOCATIONS[location]?.emoji} {LOCATIONS[location]?.label} • {cal.perSitting} kcal / sitting</p></div>
         </div>
 
-        {/* 2 */}
         <div className="bg-white rounded-[28px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-stone-100 h-full flex flex-col">
           <div className="flex items-center justify-between mb-5"><div className="flex items-center gap-2.5"><span className={`w-9 h-9 rounded-full bg-gradient-to-br ${theme.btn} text-white flex items-center justify-center text-[13px] font-bold`}>2</span><h2 className="font-display font-medium text-[21px] tracking-tight">{t(lang, 'yours')}</h2></div>{ingPicker.length > 0 && <span className="text-[11px] font-semibold bg-[#1A1A2E] text-white px-2.5 py-1 rounded-full">{ingPicker.length} picked</span>}</div>
           {ingPicker.length === 0 ? (<div className="bg-[#FAF9F6] border border-dashed border-stone-200 rounded-2xl py-6 text-center mb-4"><p className="text-[22px]">🧺</p><p className="text-[13px] text-stone-500 font-light">No ingredients yet.</p></div>) : (<div className="flex flex-wrap gap-2 mb-4">{ingPicker.map(i => (<div key={i} className="text-[13px] font-medium px-3 py-1.5 rounded-full bg-[#1A1A2E] text-white flex items-center gap-1.5"><button onClick={() => setIngPicker(p => p.filter(x => x !== i))} className="w-5 h-5 bg-white/20 hover:bg-white hover:text-black rounded-full text-[10px] font-bold flex items-center justify-center">✕</button>{i}</div>))}</div>)}
@@ -143,7 +131,6 @@ export default function IngredientPicker({ user, themeId, lang, goal, setGoal, s
           <div className="flex justify-between mt-auto pt-4"><button onClick={() => setIngPicker([])} className="text-[12px] font-medium text-stone-400 hover:text-red-500 flex gap-1 items-center transition"><Delete size={14} /> Clear all</button><p className="text-[12px] font-medium">{ingPicker.length === 0 ? 'Your basket is empty' : `${GOALS[goal]?.label} • ${cal.perSitting} kcal/sitting`}</p></div>
         </div>
 
-        {/* 3 */}
         <div id="ai-response-box" className="space-y-4 md:max-h-[560px] md:overflow-y-auto md:pr-1 scroll-mt-4">
           {isLoading && <div className="bg-white rounded-[28px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-stone-100 animate-pulse"><p className="text-center text-[12px] font-semibold text-stone-400">👩🏾‍🍳 Cooking up your recipe...</p></div>}
           {recipe && !isLoading && <AIResponse recipe={recipe} onGenerateAnother={handleGenerateAnother} onClear={handleClearAll} goal={goal} sittings={sittings} lang={lang} themeId={themeId} onAddToKcal={handleAddRecipeToKcal} user={user} location={location} />}
@@ -152,7 +139,6 @@ export default function IngredientPicker({ user, themeId, lang, goal, setGoal, s
         </div>
       </div>
 
-      {/* Cook For Me modal — keep your logic, just cleaner modal */}
       {showLazy && !isGuest && (
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowLazy(false)}>
           <div className="bg-white rounded-[28px] p-6 w-full max-w-[440px] shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -177,3 +163,4 @@ export default function IngredientPicker({ user, themeId, lang, goal, setGoal, s
       <Footer lang={lang} themeId={themeId} />
     </div>
   );
+}
