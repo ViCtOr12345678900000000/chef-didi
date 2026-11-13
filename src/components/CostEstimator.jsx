@@ -173,52 +173,52 @@ export default function CostEstimator({ recipe, location = "nigeria", user }) {
   if (!parsed.length) return null;
 
   return (
-    <div className="bg-white rounded-[24px] p-4 shadow-xl mt-4">
+    <div className="bg-white rounded-[24px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-stone-100 mt-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <h3 className="font-bold text-[14px]">💰 Cost Estimator — {selectedLoc === "lagos" ? "Nigerian Market 🇳🇬" : "Abroad Market ✈️"}</h3>
-        <div className="flex bg-stone-100 p-0.5 rounded-full text-[11px] font-bold">
-          <button type="button" onClick={() => setSelectedLoc("lagos")} className={`px-2.5 py-1 rounded-full transition ${selectedLoc === "lagos" ? "bg-green-600 text-white shadow-sm" : "text-stone-600"}`}>🇳🇬 Nigeria (₦)</button>
-          <button type="button" onClick={() => setSelectedLoc("abroad")} className={`px-2.5 py-1 rounded-full transition ${selectedLoc === "abroad" ? "bg-black text-white shadow-sm" : "text-stone-600"}`}>✈️ Abroad ($)</button>
+        <h3 className="font-display font-medium text-[15px] tracking-tight">💰 Cost Estimator — {selectedLoc === "lagos" ? "Nigerian Market 🇳🇬" : "Abroad Market ✈️"}</h3>
+        <div className="flex bg-[#FAF9F6] border border-stone-200 p-1 rounded-full text-[11px] font-semibold">
+          <button type="button" onClick={() => setSelectedLoc("lagos")} className={`px-3 py-1.5 rounded-full transition ${selectedLoc === "lagos" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-stone-500"}`}>🇳🇬 Nigeria (₦)</button>
+          <button type="button" onClick={() => setSelectedLoc("abroad")} className={`px-3 py-1.5 rounded-full transition ${selectedLoc === "abroad" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-stone-500"}`}>✈️ Abroad ($)</button>
         </div>
       </div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] text-stone-400">{communityCount > 0 ? "Green = community reported. Amber = estimated." : "Estimated per portion. Tap below to update!"}</p>
-        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full shrink-0">{loading ? "Syncing..." : `${communityCount}/${rows.length} verified`}</span>
+        <p className="text-[11px] text-stone-400 font-light">{communityCount > 0 ? "Green = community reported. Amber = estimated." : "Estimated per portion. Tap below to update!"}</p>
+        <span className="text-[10px] font-semibold bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full shrink-0">{loading ? "Syncing..." : `${communityCount}/${rows.length} verified`}</span>
       </div>
       <div className="space-y-1.5">
         {rows.map((r, idx) => (
-          <div key={idx} className="flex justify-between items-center text-[12px] py-1.5 border-b last:border-0 border-stone-100">
-            <span className="font-semibold pr-2">{r.name} <span className="font-normal text-stone-400">{r.detail}</span></span>
+          <div key={idx} className="flex justify-between items-center text-[12px] py-2 border-b last:border-0 border-stone-100">
+            <span className="font-medium pr-2">{r.name} <span className="font-light text-stone-400">{r.detail}</span></span>
             <span className="flex items-center gap-1.5 shrink-0">
-              <span className="font-bold">{r.price === 0 ? "Free" : `${currency}${r.price.toLocaleString()}`}</span>
-              {r.price > 0 && (r.source === "community" ? (<span className="text-[9px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">✓ {r.count} reports</span>) : (<span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">EST</span>))}
+              <span className="font-semibold">{r.price === 0 ? "Free" : `${currency}${r.price.toLocaleString()}`}</span>
+              {r.price > 0 && (r.source === "community" ? (<span className="text-[9px] font-semibold bg-green-50 text-green-700 border border-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">✓ {r.count} reports</span>) : (<span className="text-[9px] font-semibold bg-[#FFFBF0] text-amber-700 border border-[#F0E2A8] px-1.5 py-0.5 rounded-full whitespace-nowrap">EST</span>))}
             </span>
           </div>
         ))}
       </div>
       <div className="flex justify-between items-center mt-3 pt-3 border-t border-stone-200">
-        <span className="text-[13px] font-bold">Estimated Total</span>
-        <span className="text-[17px] font-black text-green-700">{currency}{total.toLocaleString()}</span>
+        <span className="text-[13px] font-semibold">Estimated Total</span>
+        <span className="text-[17px] font-display font-medium text-[#1A1A2E]">{currency}{total.toLocaleString()}</span>
       </div>
       {!showReport ? (
-        <button type="button" onClick={() => { setShowReport(true); if (!reportItem && parsed[0]) setReportItem(parsed[0].name); }} className="w-full mt-3 h-10 bg-black text-white rounded-full text-[12px] font-bold active:scale-95 transition">✏️ Edit / Report Price in {selectedLoc === "lagos" ? "Nigeria" : "Your Location"}</button>
+        <button type="button" onClick={() => { setShowReport(true); if (!reportItem && parsed[0]) setReportItem(parsed[0].name); }} className="w-full mt-3 h-10 bg-[#1A1A2E] hover:bg-black text-white rounded-full text-[12px] font-semibold active:scale-[0.98] transition">✏️ Edit / Report Price in {selectedLoc === "lagos" ? "Nigeria" : "Your Location"}</button>
       ) : (
-        <div className="mt-3 bg-stone-50 border border-stone-200 rounded-2xl p-3" onSubmit={(e) => e.preventDefault()}>
-          <p className="text-[12px] font-bold mb-2">Update price in {selectedLoc === "lagos" ? "Nigeria (₦)" : "Abroad ($)"}:</p>
-          <select value={reportItem} onChange={(e) => { setReportItem(e.target.value); setReportMsg(""); }} className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2">
+        <div className="mt-3 bg-[#FAF9F6] border border-stone-100 rounded-2xl p-3" onSubmit={(e) => e.preventDefault()}>
+          <p className="text-[12px] font-semibold mb-2">Update price in {selectedLoc === "lagos" ? "Nigeria (₦)" : "Abroad ($)"}:</p>
+          <select value={reportItem} onChange={(e) => { setReportItem(e.target.value); setReportMsg(""); }} className="w-full h-10 px-3 bg-white border border-stone-200 rounded-2xl text-[12px] outline-none mb-2 focus:border-[#1A1A2E]">
             {parsed.map((r, i) => (<option key={i} value={r.name}>{r.name}</option>))}
             <option value="__other__">Other ingredient...</option>
           </select>
           {reportItem === "__other__" && (
-            <input type="text" value={customItem} onChange={(e) => setCustomItem(e.target.value)} placeholder="Type ingredient e.g. Beans" className="w-full h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none mb-2" />
+            <input type="text" value={customItem} onChange={(e) => setCustomItem(e.target.value)} placeholder="Type ingredient e.g. Beans" className="w-full h-10 px-3 bg-white border border-stone-200 rounded-2xl text-[12px] outline-none mb-2 focus:border-[#1A1A2E]" />
           )}
           <div className="flex gap-2">
-            <input type="text" autoComplete="off" autoCorrect="off" spellCheck="false" value={reportPrice} onChange={(e) => setReportPrice(e.target.value)} placeholder={isAbroad ? "e.g. 5 or five" : "e.g. 5000, 5k, or five thousand"} className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-full text-[12px] outline-none" />
-            <button type="button" onClick={handleReport} disabled={reportSending} className="h-10 px-5 bg-green-600 text-white rounded-full text-[12px] font-bold disabled:opacity-50 shrink-0">{reportSending ? "Saving..." : "Save"}</button>
+            <input type="text" autoComplete="off" autoCorrect="off" spellCheck="false" value={reportPrice} onChange={(e) => setReportPrice(e.target.value)} placeholder={isAbroad ? "e.g. 5 or five" : "e.g. 5000, 5k, or five thousand"} className="flex-1 min-w-0 h-10 px-3 bg-white border border-stone-200 rounded-2xl text-[12px] outline-none focus:border-[#1A1A2E]" />
+            <button type="button" onClick={handleReport} disabled={reportSending} className="h-10 px-5 bg-[#1A1A2E] text-white rounded-full text-[12px] font-semibold disabled:opacity-50 shrink-0">{reportSending ? "Saving..." : "Save"}</button>
           </div>
           {reportPrice.trim() && parsedPreview > 0 && (<p className="text-[11px] text-green-700 font-semibold mt-1.5 pl-2">Detected amount: {currency}{parsedPreview.toLocaleString()}</p>)}
           {reportMsg && <p className="text-[11px] mt-2 font-semibold">{reportMsg}</p>}
-          <button type="button" onClick={() => setShowReport(false)} className="text-[11px] text-stone-400 font-bold mt-2 block">Cancel</button>
+          <button type="button" onClick={() => setShowReport(false)} className="text-[11px] text-stone-400 font-semibold mt-2 block hover:text-[#1A1A2E]">Cancel</button>
         </div>
       )}
     </div>
