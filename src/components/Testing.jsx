@@ -42,8 +42,19 @@ export default function Testing() {
     } catch { /* use fallback */ }
   }, []);
 
-  // FIXED: now calls /api/debug, not /api/prices-refresh + GUARD against guessing
+  // Get Current Price - with quota guard + source guard
   const getCurrentPrice = async () => {
+    // ===== QUOTA SAVER: 1 refresh per 6 hours =====
+    try {
+      const lastFetch = Number(localStorage.getItem('didi_last_fetch') || 0);
+      if (Date.now() - lastFetch < 6 * 60 * 60 * 1000) {
+        const minsLeft = Math.ceil((6 * 60 * 60 * 1000 - (Date.now() - lastFetch)) / 60000);
+        setStatus(`⏳ Prices already checked recently. Wait ${minsLeft} mins - market prices don't change every minute, and this saves your free Gemini quota.`);
+        return;
+      }
+    } catch {}
+    // ===== END QUOTA SAVER =====
+
     setLoading(true);
     setStatus('🔍 Trying...');
     try {
@@ -52,7 +63,13 @@ export default function Testing() {
       console.log('RAW:', text.slice(0, 500));
       try {
         const json = JSON.parse(text);
-        if (!res.ok) throw new Error(json.error || `Server ${res.status}`);
+        if (!res.ok) {
+          // Friendly quota message - don't show raw stack
+          if (res.status === 429 || String(json.error || '').toLowerCase().includes('quota')) {
+            throw new Error('QUOTA: Free Gemini quota finished for today. Your last good prices are still showing. Try again tomorrow, or add billing in Google AI Studio.');
+          }
+          throw new Error(json.error || `Server ${res.status}`);
+        }
         const data = json.data || json;
         if (!data || !Array.isArray(data.items)) throw new Error('No items: ' + text.slice(0, 200));
 
@@ -66,20 +83,34 @@ export default function Testing() {
         // ===== END GUARD =====
 
         setPrices(data);
-        try { localStorage.setItem('didi_live_prices', JSON.stringify(data)); } catch {}
+        try {
+          localStorage.setItem('didi_live_prices', JSON.stringify(data));
+          localStorage.setItem('didi_last_fetch', String(Date.now()));
+        } catch {}
         setStatus(`✅ Updated! ${data.updated} • ${data.source} • ✓ Verified ${withSource}/12 with real sources`);
       } catch (e) {
-        // Show the REAL server response, not Safari's generic error
-        // Don't overwrite if it's our guard message - guard already returned above
-        if (e.message && e.message.startsWith('Server said')) throw e;
-        setStatus(`❌ Server said (${res.status}): ${text.slice(0, 300)}`);
+        if (e.message && e.message.startsWith('QUOTA:')) {
+          setStatus(`❌ ${e.message}`);
+        } else {
+          setStatus(`❌ Server said (${res.status}): ${text.slice(0, 300)}`);
+        }
       }
     } catch (e) {
-      if (!e.message?.startsWith('Server said')) {
+      if (!e.message?.startsWith('QUOTA:') && !e.message?.startsWith('Server said')) {
         setStatus(`❌ Fetch failed: ${e.message}`);
       }
     }
     setLoading(false);
+  };
+
+  // Clear fake / stuck prices - back to 10 Nov fallback
+  const clearSavedPrices = () => {
+    try {
+      localStorage.removeItem('didi_live_prices');
+      localStorage.removeItem('didi_last_fetch');
+    } catch {}
+    setPrices(FALLBACK_PRICES);
+    setStatus('🗑️ Cleared. Back to 10 Nov fallback prices (real Ola of North).');
   };
 
   // Safe getter - never crashes if item is missing
@@ -145,6 +176,15 @@ export default function Testing() {
           >
             {loading ? '⏳ Getting Current Prices...' : '🔄 Get Current Price'}
           </button>
+
+          {/* CLEAR BUTTON - removes fake stuck prices */}
+          <button
+            onClick={clearSavedPrices}
+            className="w-full mt-2 bg-stone-100 text-stone-600 font-bold py-2 rounded-xl text-xs"
+          >
+            🗑️ Clear saved prices (back to 10 Nov fallback)
+          </button>
+
           {status && <p className="text-xs mt-2 bg-stone-50 p-2 rounded-lg">{status}</p>}
           {prices?.notes && <p className="text-xs mt-2 bg-yellow-50 text-yellow-800 p-2 rounded-lg">💡 {prices.notes}</p>}
 
