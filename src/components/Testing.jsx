@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 
+
 const DEFAULT_PRICES = [
   { id: "tomato", name: "Tomato", unit: "1kg", price: 1650, emoji: "🍅" },
   { id: "rodo", name: "Rodo Pepper", unit: "1kg", price: 1794, emoji: "🌶️" },
