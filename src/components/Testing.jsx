@@ -1,98 +1,160 @@
 import { useState, useEffect } from 'react';
 
-
-
-const DEFAULT_PRICES = [
-  { id: "tomato", name: "Tomato", unit: "1kg", price: 1650, emoji: "🍅" },
-  { id: "rodo", name: "Rodo Pepper", unit: "1kg", price: 1794, emoji: "🌶️" },
-  { id: "tatashe", name: "Tatashe", unit: "1kg", price: 2130, emoji: "🫑" },
-  { id: "shombo", name: "Shombo", unit: "1kg", price: 2000, emoji: "🌶️" },
-  { id: "onion", name: "Onion", unit: "1kg", price: 1728, emoji: "🧅" },
-  { id: "rice_foreign", name: "Foreign Rice", unit: "1 derica", price: 1100, emoji: "🍚" },
-  { id: "rice_local", name: "Local Rice", unit: "1 derica", price: 1000, emoji: "🍚" },
-  { id: "garri_ijebu", name: "Garri Ijebu", unit: "1 paint", price: 1200, emoji: "🥣" },
-  { id: "yam", name: "Yam (medium)", unit: "1 tuber", price: 2350, emoji: "🍠" },
-  { id: "crayfish", name: "Crayfish", unit: "small plate", price: 500, emoji: "🦐" },
-  { id: "seasoning", name: "Seasoning (2 cubes)", unit: "pack", price: 200, emoji: "🧂" },
-  { id: "palm_oil", name: "Palm Oil", unit: "1 bottle 75cl", price: 2800, emoji: "🫙" },
-];
+// Fallback if Gemini hasn't run yet - real prices from 10 Nov 2026
+const FALLBACK_PRICES = {
+  updated: "10 Nov 2026",
+  source: "Mile 12 via Ola of North + Lagos Ministry",
+  market: "Mile 12",
+  items: [
+    { id: "tomato", name: "Tomato", unit: "1kg", price: 1650, emoji: "🍅" },
+    { id: "rodo", name: "Rodo Pepper", unit: "1kg", price: 1794, emoji: "🌶️" },
+    { id: "tatashe", name: "Tatashe", unit: "1kg", price: 2130, emoji: "🫑" },
+    { id: "shombo", name: "Shombo", unit: "1kg", price: 2000, emoji: "🌶️" },
+    { id: "onion", name: "Onion", unit: "1kg", price: 1728, emoji: "🧅" },
+    { id: "rice_foreign", name: "Foreign Rice", unit: "1 derica", price: 1100, emoji: "🍚" },
+    { id: "rice_local", name: "Local Rice", unit: "1 derica", price: 1000, emoji: "🍚" },
+    { id: "garri_ijebu", name: "Garri Ijebu", unit: "1 paint", price: 1200, emoji: "🥣" },
+    { id: "yam", name: "Yam (medium)", unit: "1 tuber", price: 2350, emoji: "🍠" },
+    { id: "crayfish", name: "Crayfish", unit: "small plate", price: 500, emoji: "🦐" },
+    { id: "seasoning", name: "Seasoning (2 cubes)", unit: "pack", price: 200, emoji: "🧂" },
+    { id: "palm_oil", name: "Palm Oil", unit: "1 bottle 75cl", price: 2800, emoji: "🫙" },
+  ],
+  notes: "Onion is expensive this week",
+  confidence: "high"
+};
 
 export default function Testing() {
-  const [items, setItems] = useState(DEFAULT_PRICES);
-  const [updated, setUpdated] = useState("10 Nov 2026");
-  const [source, setSource] = useState("Mile 12 via Ola of North + Lagos Ministry");
-  const [notes, setNotes] = useState("Onion is expensive this week");
-  const [status, setStatus] = useState("");
+  const [prices, setPrices] = useState(FALLBACK_PRICES);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('');
+  const [budget, setBudget] = useState(5000);
 
+  // Safe load - this is what fixes the white screen
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('chef-didi-prices');
+      const saved = localStorage.getItem('didi_live_prices');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed.items)) {
-          setItems(parsed.items);
-          if (parsed.updated) setUpdated(parsed.updated);
-          if (parsed.source) setSource(parsed.source);
-          if (parsed.notes) setNotes(parsed.notes);
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setPrices(parsed);
         }
       }
-    } catch (e) { /* ignore, use defaults */ }
+    } catch { /* use fallback */ }
   }, []);
 
-  const refresh = async () => {
+  // FIXED: now calls /api/debug, not /api/prices-refresh
+  const getCurrentPrice = async () => {
     setLoading(true);
-    setStatus("");
+    setStatus('🔍 Gemini is checking FoodPrices.ng + Mile 12...');
     try {
       const res = await fetch('/api/debug?action=prices-refresh', { method: 'POST' });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      
       const data = json.data || json;
-      if (data && Array.isArray(data.items) && data.items.length > 0) {
-        setItems(data.items);
-        if (data.updated) setUpdated(data.updated);
-        if (data.source) setSource(data.source);
-        if (data.notes) setNotes(data.notes);
-        try { localStorage.setItem('chef-didi-prices', JSON.stringify(data)); } catch {}
-        setStatus("✅ Updated!");
-      } else {
-        throw new Error("No items returned");
+      if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+        throw new Error('No items returned');
       }
+      setPrices(data);
+      try { localStorage.setItem('didi_live_prices', JSON.stringify(data)); } catch {}
+      setStatus(`✅ Updated! ${data.updated} • Source: ${data.source} • Confidence: ${data.confidence || 'high'}`);
     } catch (e) {
       setStatus(`❌ Could not fetch: ${e.message}. Showing last saved prices.`);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
+  // Safe getter - never crashes if item is missing
+  const getItemPrice = (id) => {
+    const found = (prices?.items || []).find(i => i.id === id);
+    return found?.price || 0;
+  };
+
+  const baskets = [
+    {
+      name: "Jollof Rice",
+      items: [
+        { label: "Rice (2 derica)", cost: getItemPrice('rice_foreign') * 2 },
+        { label: "Tomato (1kg)", cost: getItemPrice('tomato') },
+        { label: "Rodo (0.5kg)", cost: Math.round(getItemPrice('rodo') * 0.5) },
+        { label: "Onion (0.25kg)", cost: Math.round(getItemPrice('onion') * 0.25) },
+      ]
+    },
+    {
+      name: "Concoction Rice",
+      items: [
+        { label: "Rice (2 derica)", cost: getItemPrice('rice_foreign') * 2 },
+        { label: "Palm Oil (small)", cost: 800 },
+        { label: "Pepper mix (0.5kg)", cost: Math.round(getItemPrice('rodo') * 0.5) },
+        { label: "Onion (0.25kg)", cost: Math.round(getItemPrice('onion') * 0.25) },
+        { label: "Crayfish", cost: getItemPrice('crayfish') },
+        { label: "Seasoning", cost: getItemPrice('seasoning') },
+      ]
+    }
+  ];
+
+  const items = prices?.items || FALLBACK_PRICES.items;
+
   return (
-    <div style={{ background: '#fff', borderRadius: 16, padding: 16, margin: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>💰 Live ₦5k Prices - Mile 12</div>
-          <div style={{ fontSize: 12, color: '#666' }}>Last updated: {updated}</div>
-          <div style={{ fontSize: 12, color: '#666' }}>Source: {source}</div>
-        </div>
-        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>● LIVE</span>
-      </div>
+    <div className="min-h-screen bg-stone-50 p-4 pb-24">
+      <div className="max-w-[600px] mx-auto">
+        <h1 className="text-2xl font-bold">🧪 Didi Lab - #testing</h1>
+        <p className="text-stone-500 text-sm">Only you see this. Test here before it goes live.</p>
 
-      <button onClick={refresh} disabled={loading} style={{ width: '100%', marginTop: 12, padding: '12px', border: 'none', borderRadius: 10, background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
-        {loading ? '⏳ Updating...' : '🔄 Get Current Price'}
-      </button>
-
-      {status ? <div style={{ marginTop: 10, fontSize: 13, color: status.startsWith('❌') ? '#b91c1c' : '#166534' }}>{status}</div> : null}
-
-      {notes ? <div style={{ marginTop: 10, background: '#fef9c3', padding: '8px 10px', borderRadius: 8, fontSize: 13 }}>💡 {notes}</div> : null}
-
-      <div style={{ marginTop: 12 }}>
-        {items.map((it) => (
-          <div key={it.id || it.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-            <span>{it.emoji} {it.name} <span style={{ color: '#999', fontSize: 12 }}>({it.unit})</span></span>
-            <b>₦{(it.price ?? 0).toLocaleString()}</b>
+        {/* ===== LIVE ₦5k SECTION ===== */}
+        <div className="bg-white border rounded-2xl p-4 mt-4 shadow-sm">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-bold text-lg">💰 Live ₦5k Prices - {prices?.market || 'Mile 12'}</p>
+              <p className="text-xs text-stone-500">Last updated: {prices?.updated || '10 Nov 2026'}</p>
+              <p className="text-xs text-stone-500">Source: {prices?.source || ''}</p>
+            </div>
+            <span className="text-[11px] bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">● LIVE</span>
           </div>
-        ))}
+
+          {/* THE BUTTON */}
+          <button
+            onClick={getCurrentPrice}
+            disabled={loading}
+            className="w-full mt-3 bg-green-600 text-white font-bold py-3.5 rounded-xl text-sm active:scale-[0.98] disabled:opacity-50"
+          >
+            {loading ? '⏳ Getting Current Prices...' : '🔄 Get Current Price'}
+          </button>
+          {status && <p className="text-xs mt-2 bg-stone-50 p-2 rounded-lg">{status}</p>}
+          {prices?.notes && <p className="text-xs mt-2 bg-yellow-50 text-yellow-800 p-2 rounded-lg">💡 {prices.notes}</p>}
+
+          {/* PRICE SECTION - Auto-filled by Gemini */}
+          <div className="mt-4 space-y-2">
+            {items.map(item => (
+              <div key={item.id} className="flex justify-between items-center bg-stone-50 p-2.5 rounded-lg text-sm">
+                <span>{item.emoji} {item.name} <span className="text-stone-400 text-xs">({item.unit})</span></span>
+                <b>{item.price ? `₦${item.price.toLocaleString()}` : '— No data'}</b>
+              </div>
+            ))}
+          </div>
+
+          {/* BUDGET CALCULATOR */}
+          <div className="mt-5">
+            <p className="font-bold">What can ₦{budget.toLocaleString()} cook today?</p>
+            <input type="range" min={3000} max={10000} step={500} value={budget} onChange={e => setBudget(Number(e.target.value))} className="w-full mt-2" />
+            <p className="text-xs text-stone-500">Budget: ₦{budget.toLocaleString()} — drag to change</p>
+
+            {baskets.map(b => {
+              const total = b.items.reduce((s, x) => s + x.cost, 0);
+              const fits = total <= budget;
+              return (
+                <div key={b.name} className={`border rounded-xl p-3 mt-3 ${fits ? 'border-green-300 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                  <p className="font-bold text-sm">{b.name}</p>
+                  {b.items.map(x => <p key={x.label} className="text-xs flex justify-between"><span>{x.label}</span><span>₦{x.cost.toLocaleString()}</span></p>)}
+                  <p className="text-sm font-bold mt-1">Total: ₦{total.toLocaleString()} {fits ? '✅ Fits' : `❌ Over by ₦${(total - budget).toLocaleString()}`}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <button onClick={() => { window.location.hash = ''; window.location.reload(); }} className="w-full mt-4 bg-stone-900 text-white font-bold py-3 rounded-xl text-sm">← Back to Main Site</button>
       </div>
-      <p style={{ fontSize: 11, color: '#999', marginTop: 10 }}>Only you see this. Test here before it goes live.</p>
     </div>
   );
 }
