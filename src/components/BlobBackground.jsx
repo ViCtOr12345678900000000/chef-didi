@@ -1,12 +1,11 @@
 export default function BlobBackground() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      <div className="absolute inset-0 bg-[#FAF9F6]" />
+    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-black" aria-hidden="true">
       <div className="blob-main absolute top-[120px] left-[-20px] w-[90vw] h-[52vw] max-w-[440px] max-h-[240px] bg-[#F5B8B8]" />
       <div className="blob-circle absolute top-[180px] left-[-25px] w-[80px] h-[80px] bg-[#F5B8B8]" />
       <div className="blob-circle-2 absolute top-[110px] right-[30px] w-[28px] h-[28px] bg-[#C8D8D0]" />
-      <div className="blob-dark absolute top-[300px] left-[110px] w-[58px] h-[58px] bg-[#1A1A2E]" />
-      <div className="blob-dark-2 absolute top-[105px] right-[90px] w-[16px] h-[16px] bg-[#1A1A2E]" />
+      <div className="blob-dark absolute top-[300px] left-[110px] w-[58px] h-[58px] bg-[#1A1A2E] border border-white/20" />
+      <div className="blob-dark-2 absolute top-[105px] right-[90px] w-[16px] h-[16px] bg-[#1A1A2E] border border-white/20" />
       <style jsx>{`
         .blob-main { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; animation: morph 8s ease-in-out infinite alternate, drift 12s ease-in-out infinite alternate; opacity: 0.9; }
         .blob-circle { border-radius: 50%; animation: drift2 9s ease-in-out infinite alternate; }
